@@ -31,3 +31,4 @@ jobs:
       - run: cargo test -p porch-server --locked postgres_migrations -- --ignored
       - run: cargo test -p porch-server --locked --test identity -- --ignored
       - run: cargo build --workspace --locked
+      - run: python3 scripts/identity-smoke.py
