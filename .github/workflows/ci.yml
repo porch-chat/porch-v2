@@ -29,4 +29,5 @@ jobs:
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
       - run: cargo test -p porch-server --locked postgres_migrations -- --ignored
+      - run: cargo test -p porch-server --locked --test identity -- --ignored
       - run: cargo build --workspace --locked

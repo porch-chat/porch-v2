@@ -16,15 +16,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .connect(&config.database_url)
         .await?;
     MIGRATOR.run(&pool).await?;
+    if std::env::args().nth(1).as_deref() == Some("bootstrap-admin") {
+        let user = porch_server::identity::bootstrap(
+            &pool,
+            std::env::var("PORCH_BOOTSTRAP_USERNAME")?,
+            std::env::var("PORCH_BOOTSTRAP_PASSWORD")?,
+        )
+        .await
+        .map_err(|e| format!("bootstrap failed: {:?}", e.0))?;
+        println!("created administrator {}", user.username);
+        return Ok(());
+    }
+    let state = porch_server::identity::IdentityState::new(pool.clone())
+        .await
+        .map_err(|e| format!("identity initialization failed: {:?}", e.0))?;
     let listener = tokio::net::TcpListener::bind(config.bind).await?;
     tracing::info!(address = %listener.local_addr()?, "Porch listening");
-    axum::serve(listener, router())
-        .with_graceful_shutdown(async {
-            if let Err(error) = tokio::signal::ctrl_c().await {
-                tracing::error!(%error, "shutdown signal failed");
-            }
-        })
-        .await?;
+    axum::serve(
+        listener,
+        router().merge(porch_server::identity::routes(state)),
+    )
+    .with_graceful_shutdown(async {
+        if let Err(error) = tokio::signal::ctrl_c().await {
+            tracing::error!(%error, "shutdown signal failed");
+        }
+    })
+    .await?;
     pool.close().await;
     Ok(())
 }
