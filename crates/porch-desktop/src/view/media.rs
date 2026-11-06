@@ -85,7 +85,13 @@ impl Porch {
         for attachment in &message.attachments {
             let id = attachment.id.clone();
             let filename = attachment.filename.clone();
+            let previewable = matches!(
+                attachment.mime.as_str(),
+                "image/png" | "image/jpeg" | "image/webp" | "video/mp4" | "video/webm"
+            );
             let mut card = div()
+                .w_full()
+                .max_w(px(if previewable { 504. } else { 344. }))
                 .p_3()
                 .rounded_lg()
                 .bg(rgb(RAISED))
@@ -101,7 +107,9 @@ impl Porch {
             let mut controls = div().flex().gap_2().flex_wrap().child(
                 Button::new(SharedString::from(format!("save-{mid}-{id}")))
                     .small()
-                    .label("Save file")
+                    .ghost()
+                    .icon(icon("download"))
+                    .tooltip("Save file")
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.save_file(
                             conversation,

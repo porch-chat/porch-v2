@@ -23,7 +23,7 @@ const PAGE: u32 = 0x111210;
 const SURFACE: u32 = 0x191D19;
 const RAISED: u32 = 0x232B24;
 const CREAM: u32 = 0xF4E8D7;
-const MUTED: u32 = 0xB8B5A6;
+const MUTED: u32 = 0xCAC7B9;
 const AMBER: u32 = 0xF3B85A;
 const BORDER: u32 = 0x354136;
 pub struct Porch {
@@ -58,7 +58,7 @@ fn small(text: impl Into<SharedString>) -> Div {
         .child(text.into())
 }
 fn heading(text: impl Into<SharedString>) -> Div {
-    div().font_weight(FontWeight::BOLD).child(text.into())
+    div().font_weight(FontWeight::SEMIBOLD).child(text.into())
 }
 impl Porch {
     pub fn new(root: PathBuf, window: &mut Window, cx: &mut Context<Self>) -> Self {
@@ -81,7 +81,7 @@ impl Porch {
         });
         let composer = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder("Message your people…")
+                .placeholder("Message")
                 .auto_grow(1, 6)
         });
         let dm =
@@ -184,8 +184,22 @@ impl Porch {
                 .and_then(|id| self.drafts.get(&id))
                 .cloned()
                 .unwrap_or_default();
-            self.composer
-                .update(cx, |s, cx| s.set_value(text, window, cx));
+            let placeholder = snapshot
+                .heads
+                .iter()
+                .find(|h| Some(h.id) == snapshot.selected)
+                .map(|h| {
+                    if h.community_id.is_some() {
+                        format!("Message #{}", h.name)
+                    } else {
+                        format!("Message {}", h.name)
+                    }
+                })
+                .unwrap_or_else(|| "Message".into());
+            self.composer.update(cx, |s, cx| {
+                s.set_value(text, window, cx);
+                s.set_placeholder(placeholder, window, cx)
+            });
             self.reply = None;
             self.editing = None;
             self.community = snapshot
@@ -316,9 +330,8 @@ impl Porch {
     fn login_view(&self, cx: &mut Context<Self>) -> Div {
         div().size_full().flex().items_center().justify_center().bg(rgb(PAGE))
             .child(div().w(px(460.)).p_10().flex().flex_col().gap_5().bg(rgb(SURFACE)).rounded_xl().border_1().border_color(rgb(BORDER))
-                .child(self.logo()).child(div().text_size(px(36.)).font_weight(FontWeight::BOLD).child("Your people."))
-                .child(div().text_size(px(36.)).font_weight(FontWeight::BOLD).mt(px(-12.)).text_color(rgb(AMBER)).child("Your place."))
-                .child(small("A private place to pull up and talk awhile."))
+                .child(self.logo()).child(heading("Porch").text_size(px(28.)))
+                .child(heading(if self.register {"Create account"} else {"Sign in"}))
                 .child(Input::new(&self.origin)).child(Input::new(&self.username)).child(Input::new(&self.password))
                 .when(self.register,|d|d.child(Input::new(&self.invite)))
                 .child(Button::new("login").primary().label(if self.register{"Create account"}else{"Sign in"}).loading(self.snapshot.busy).on_click(cx.listener(|this,_,window,cx|this.login(window,cx))))
@@ -457,13 +470,13 @@ impl Porch {
             .flex_col()
             .gap_2();
         if v.channel.is_none() {
-            return d.child(small("Find a voice channel. Pull up a chair."));
+            return div();
         }
         let muted = v.manual_muted;
         let deafened = v.flags.deafened;
         let ptt = v.ptt;
         d = d
-            .child(heading("On the porch"))
+            .child(heading("Voice connected"))
             .child(
                 div()
                     .flex()
@@ -585,16 +598,15 @@ impl Porch {
             .find(|c| Some(c.community.id) == self.community);
         let title = community
             .map(|c| c.community.name.as_str())
-            .unwrap_or("Your conversations");
+            .unwrap_or("Direct messages");
         let mut list = div()
             .id("channels")
             .flex_1()
             .overflow_y_scroll()
-            .px_3()
-            .py_4()
+            .p_2()
             .flex()
             .flex_col()
-            .gap_2();
+            .gap_1();
         if let Some(c) = community {
             for category in std::iter::once(None).chain(c.categories.iter().map(Some)) {
                 if let Some(category) = category {
@@ -727,7 +739,7 @@ impl Porch {
             );
         }
         div()
-            .w(px(264.))
+            .w(px(288.))
             .flex_shrink_0()
             .h_full()
             .bg(rgb(SURFACE))
@@ -737,7 +749,7 @@ impl Porch {
             .flex_col()
             .child(
                 div()
-                    .h(px(64.))
+                    .h(px(48.))
                     .px_5()
                     .flex()
                     .items_center()
@@ -790,16 +802,16 @@ impl Porch {
             .flex_shrink_0()
             .group("message")
             .relative()
-            .px_6()
+            .px_3()
             .py_1()
-            .mt(if grouped { px(0.) } else { px(16.) })
+            .mt(if grouped { px(0.) } else { px(8.) })
             .hover(|d| d.bg(rgb(0x1C211C)))
             .flex()
             .gap_3()
             .child(if grouped {
-                div().w(px(38.)).flex_shrink_0()
+                div().w(px(40.)).flex_shrink_0()
             } else {
-                avatar(message.author_id, &author, 38.)
+                avatar(message.author_id, &author, 40.)
             })
             .child(
                 div()
@@ -942,15 +954,12 @@ impl Porch {
                 .justify_center()
                 .gap_4()
                 .child(self.logo())
-                .child(heading("Pull up a chair."))
-                .child(small(
-                    "Choose a channel or a direct message to get started.",
-                ));
+                .child(heading("Select a conversation"));
         };
         panel = panel
             .child(
                 div()
-                    .h(px(64.))
+                    .h(px(48.))
                     .flex_shrink_0()
                     .px_6()
                     .flex()
@@ -963,8 +972,15 @@ impl Porch {
                             .flex()
                             .flex_col()
                             .gap_1()
-                            .child(heading(head.name.clone()))
-                            .child(small("Pull up. Talk awhile.")),
+                            .flex_row()
+                            .items_center()
+                            .gap_2()
+                            .child(icon(if head.community_id.is_some() {
+                                "hash"
+                            } else {
+                                "inbox"
+                            }))
+                            .child(heading(head.name.clone())),
                     ),
             )
             .child(
@@ -1003,12 +1019,19 @@ impl Porch {
                                             this.command(Command::Select(id), cx);
                                         }
                                     })),
-                            )
-                            .child(small("Only your people here").min_w_0().flex_1().truncate()),
+                            ),
                     )
-                    .when(self.snapshot.messages.is_empty(), |d| d.child(div().px_6().py_5().flex().flex_col().gap_3()
-                        .child(div().text_size(px(28.)).text_color(rgb(AMBER)).child("A little room for your people."))
-                        .child(small("This conversation starts with you. Pull up a chair and say hello."))))
+                    .when(self.snapshot.messages.is_empty(), |d| {
+                        d.child(
+                            div()
+                                .px_6()
+                                .py_5()
+                                .flex()
+                                .flex_col()
+                                .gap_3()
+                                .child(small("No messages yet.")),
+                        )
+                    })
                     .children(self.snapshot.messages.iter().enumerate().map(|(i, m)| {
                         let grouped = i
                             .checked_sub(1)
@@ -1115,14 +1138,9 @@ impl Porch {
                         )
                     })
                     .child(self.transfers(cx))
-                    .child(Input::new(&self.composer))
                     .child(
-                        div()
-                            .flex()
-                            .justify_between()
-                            .items_center()
-                            .child(small("Enter to send · Shift+Enter for a new line"))
-                            .child(
+                        Input::new(&self.composer)
+                            .prefix(
                                 Button::new("choose-file")
                                     .ghost()
                                     .icon(icon("plus"))
@@ -1132,7 +1150,7 @@ impl Porch {
                                         this.choose_file(window, cx)
                                     })),
                             )
-                            .child(
+                            .suffix(
                                 Button::new("send")
                                     .primary()
                                     .icon(icon("send"))
@@ -1146,7 +1164,8 @@ impl Porch {
                                         cx.listener(|this, _, window, cx| this.send(window, cx)),
                                     ),
                             ),
-                    ),
+                    )
+                    .child(small("Enter to send · Shift+Enter for a new line")),
             );
         panel
     }
@@ -1182,7 +1201,7 @@ impl Porch {
         }
         let mut panel = div()
             .id("members")
-            .w(px(216.))
+            .w(px(240.))
             .flex_shrink_0()
             .h_full()
             .bg(rgb(SURFACE))
@@ -1194,6 +1213,17 @@ impl Porch {
             .flex()
             .flex_col()
             .gap_2();
+        let count: usize = groups.values().map(Vec::len).sum();
+        panel = panel.child(
+            div()
+                .h(px(48.))
+                .flex_shrink_0()
+                .flex()
+                .items_center()
+                .border_b_1()
+                .border_color(rgb(BORDER))
+                .child(heading(format!("Members · {count}"))),
+        );
         for (role, ids) in groups {
             panel = panel.child(
                 small(format!("{} · {}", role.to_uppercase(), ids.len()))
@@ -1213,7 +1243,12 @@ impl Porch {
                             div()
                                 .flex()
                                 .flex_col()
-                                .child(div().text_size(px(12.)).child(name))
+                                .child(
+                                    div()
+                                        .text_size(px(12.))
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .child(name),
+                                )
                                 .when(
                                     self.snapshot.user.as_ref().is_some_and(|u| u.id == id),
                                     |d| d.child(small("You").text_size(px(10.))),
@@ -1222,15 +1257,12 @@ impl Porch {
                 );
             }
         }
-        panel.child(
-            small("Member directory · live presence unavailable")
-                .text_size(px(10.))
-                .mt_4(),
-        )
+        panel
     }
+
     fn settings_panel(&self, cx: &mut Context<Self>) -> Div {
         div().p_5().bg(rgb(RAISED)).flex().flex_col().gap_3().border_b_1().border_color(rgb(BORDER))
-            .child(heading("Make yourself comfortable."))
+            .child(heading("Settings"))
             .child(div().flex().items_center().gap_3()
                 .child(small(format!("Message size · {}px",self.settings.font_size)))
                 .child(Button::new("smaller").label("A−").on_click(cx.listener(|this,_,_,cx|{this.settings.font_size=(this.settings.font_size-1.).max(12.);this.persist(cx)})))
@@ -1252,7 +1284,7 @@ impl Render for Porch {
         div().size_full().flex().flex_col()
             .on_key_down(cx.listener(|this,e:&KeyDownEvent,_,cx|{if e.keystroke.key=="f9"&&!e.is_held{this.ptt(true,cx);}}))
             .on_key_up(cx.listener(|this,e:&KeyUpEvent,_,cx|{if e.keystroke.key=="f9"{this.ptt(false,cx);}}))
-            .font_family("Manrope").text_size(px(self.settings.font_size)).text_color(rgb(CREAM)).bg(rgb(PAGE))
+            .font_family("Manrope").font_weight(FontWeight::MEDIUM).text_size(px(self.settings.font_size)).text_color(rgb(CREAM)).bg(rgb(PAGE))
             .when(self.snapshot.user.is_some()&&self.show_settings,|d|d.child(self.settings_panel(cx)))
             .when_some(self.error.clone().or_else(||self.snapshot.error.clone()),|d,e|d.child(div().px_5().py_3().bg(rgb(0x45271F)).child(e)))
             .when(self.snapshot.user.is_some()&&self.snapshot.notice.is_some(),|d|d.child(div().p_3().bg(rgb(RAISED)).flex().gap_3()

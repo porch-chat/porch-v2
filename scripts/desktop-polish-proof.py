@@ -56,10 +56,10 @@ with tempfile.TemporaryDirectory(prefix='porch-polish-') as data:
         desktop=subprocess.Popen([bin/'porch-desktop'],env=ui,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
         subprocess.run(['xdotool','search','--sync','--name','^Porch$'],env=ui,timeout=20,stdout=subprocess.DEVNULL)
         time.sleep(3)
-        for y,value in [(509,env['PORCH_URL']),(562,'dylan'),(614,password)]:
+        for y,value in [(466,env['PORCH_URL']),(519,'dylan'),(571,password)]:
             subprocess.run(['xdotool','mousemove','720',str(y),'click','1','key','ctrl+a'],env=ui,check=True)
             subprocess.run(['xdotool','type','--clearmodifiers','--file','-'],input=value,text=True,env=ui,check=True)
-        subprocess.run(['xdotool','mousemove','720','665','click','1'],env=ui,check=True)
+        subprocess.run(['xdotool','mousemove','720','622','click','1'],env=ui,check=True)
         time.sleep(6)
         # Official community is first, the fixture community second.
         subprocess.run(['xdotool','mousemove','52','310','click','1'],env=ui,check=True)
@@ -67,10 +67,12 @@ with tempfile.TemporaryDirectory(prefix='porch-polish-') as data:
         subprocess.run(['xdotool','mousemove','700','110'],env=ui,check=True)
         time.sleep(2)
         out=root/'docs/evidence'; out.mkdir(exist_ok=True)
-        subprocess.run(['import','-window','root',out/'ui-polish-conversation.png'],env=ui,check=True)
+        # Capture the native client, excluding Openbox's bright external frame.
+        wid=subprocess.check_output(['xdotool','search','--name','^Porch$'],env=ui,text=True).splitlines()[0]
+        subprocess.run(['import','-window',wid,out/'ui-polish-conversation.png'],env=ui,check=True)
         subprocess.run(['xdotool','mousemove','700','390'],env=ui,check=True)
         time.sleep(1)
-        subprocess.run(['import','-window','root',out/'ui-polish-hover.png'],env=ui,check=True)
+        subprocess.run(['import','-window',wid,out/'ui-polish-hover.png'],env=ui,check=True)
         print('Native fixture screenshots captured; inspect before claiming acceptance.')
     finally:
         for p in (desktop,wm,server):

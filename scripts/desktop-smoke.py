@@ -86,13 +86,13 @@ try:
             subprocess.run(["xdotool", "search", "--sync", "--name", "^Porch$"],
                            env=ui, check=True, timeout=20, stdout=subprocess.DEVNULL)
             time.sleep(2)
-            for y, value in [(509, env["PORCH_URL"]), (562, "desktop_smoke"), (614, password)]:
+            for y, value in [(466, env["PORCH_URL"]), (519, "desktop_smoke"), (571, password)]:
                 subprocess.run(["xdotool", "mousemove", "720", str(y), "click", "1", "key", "ctrl+a"],
                                env=ui, check=True, timeout=10)
                 # Fixture credentials travel through stdin, not process argv.
                 subprocess.run(["xdotool", "type", "--clearmodifiers", "--file", "-"],
                                input=value, text=True, env=ui, check=True, timeout=10)
-            subprocess.run(["xdotool", "mousemove", "720", "665", "click", "1"],
+            subprocess.run(["xdotool", "mousemove", "720", "622", "click", "1"],
                            env=ui, check=True, timeout=10)
 
             def count():

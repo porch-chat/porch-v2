@@ -68,7 +68,11 @@ impl Porch {
             .map(|u| u.id)
             .unwrap_or_default();
         div()
-            .p_3()
+            .px_2()
+            .h(px(56.))
+            .flex_shrink_0()
+            .border_t_1()
+            .border_color(rgb(BORDER))
             .bg(rgb(0x20271F))
             .flex()
             .items_center()

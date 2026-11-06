@@ -12,6 +12,7 @@ impl AssetSource for Assets {
             "porch/plus.svg" => Some(include_bytes!("icons/plus.svg")),
             "porch/send.svg" => Some(include_bytes!("icons/send.svg")),
             "porch/reply.svg" => Some(include_bytes!("icons/reply.svg")),
+            "porch/download.svg" => Some(include_bytes!("icons/download.svg")),
             "porch/edit.svg" => Some(include_bytes!("icons/edit.svg")),
             "porch/heart.svg" => Some(include_bytes!("icons/heart.svg")),
             "porch/chevron-down.svg" => Some(include_bytes!("icons/chevron-down.svg")),

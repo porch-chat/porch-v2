@@ -31,7 +31,8 @@ fn main() {
             theme.secondary = rgb(0x232B24).into();
             theme.secondary_foreground = rgb(0xF4E8D7).into();
             theme.muted = rgb(0x232B24).into();
-            theme.muted_foreground = rgb(0xB8B5A6).into();
+            theme.muted_foreground = rgb(0xCAC7B9).into();
+            theme.window_border = rgb(0x354136).into();
             theme.input = rgb(0x596458).into();
             theme.border = rgb(0x596458).into();
             theme.caret = rgb(0xF3B85A).into();
