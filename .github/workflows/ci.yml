@@ -100,3 +100,65 @@ jobs:
             target/debug/porch-desktop.exe
             assets/brand/fonts/OFL-Manrope.txt
           retention-days: 7
+
+  flutter-desktop:
+    name: Flutter ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Rust toolchain
+        run: rustup show active-toolchain
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: flutter-bridge
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.8'
+          channel: stable
+          cache: true
+      - name: Linux Flutter build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev libpulse-dev
+      - working-directory: apps/porch_flutter
+        run: flutter pub get --enforce-lockfile
+      - working-directory: apps/porch_flutter
+        run: flutter analyze
+      - working-directory: apps/porch_flutter
+        run: flutter test
+      - name: Build Linux bundle with Rust bridge
+        if: runner.os == 'Linux'
+        run: scripts/flutter-build.sh
+      - name: Generated Dart native bridge integration
+        if: runner.os == 'Linux'
+        env:
+          DATABASE_URL: postgres://porch:ci_only@127.0.0.1:5432/porch
+        run: |
+          sudo systemctl start postgresql
+          sudo -u postgres psql -c "CREATE ROLE porch WITH LOGIN SUPERUSER PASSWORD 'ci_only'"
+          sudo -u postgres createdb -O porch porch
+          cargo build -p porch-server -p porch-cli --locked
+          python3 scripts/flutter-fixture-proof.py
+      - name: Build Windows bundle with Rust bridge
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: scripts/flutter-build.ps1
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Linux'
+        with:
+          name: porch-flutter-linux-x86_64
+          path: |
+            apps/porch_flutter/build/linux/x64/release/bundle/
+            apps/porch_flutter/assets/OFL-Manrope.txt
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Windows'
+        with:
+          name: porch-flutter-windows-x86_64
+          path: |
+            apps/porch_flutter/build/windows/x64/runner/Release/
+            apps/porch_flutter/assets/OFL-Manrope.txt
+          retention-days: 7
