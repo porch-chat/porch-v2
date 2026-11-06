@@ -91,7 +91,8 @@ fn run() -> Result<()> {
         base: base.trim_end_matches('/').into(),
     };
     let expected = match command {
-        "invite-create" => 3,
+        "invite-create" | "message-mutate" | "message-search" | "message-read" => 3,
+        "messages" | "message-send" | "message-delta" | "message-pins" | "dm-mutate" => 2,
         "community-invite-create" => 4,
         "community-invite-revoke" => 3,
         "community" | "community-create" | "community-mutate" | "community-invites" => 2,
@@ -171,6 +172,96 @@ fn run() -> Result<()> {
             let id: i64 = args[1].parse()?;
             let invite: i64 = args[2].parse()?;
             cli.delete(&format!("/communities/{id}/invites/{invite}"))?;
+        }
+        "conversations" => cli.read::<Vec<ConversationHead>>("/conversations")?,
+        "dm-create" => {
+            let body: CreateDm = serde_json::from_str(&env::var("PORCH_COMMAND")?)?;
+            let out: ConversationHead = cli
+                .request(Method::POST, "/conversations", Some(&body), true)?
+                .json()?;
+            print_json(&out)?;
+        }
+        "dm-mutate" => {
+            let id: i64 = args[1].parse()?;
+            let body: DmCommand = serde_json::from_str(&env::var("PORCH_COMMAND")?)?;
+            cli.request(
+                Method::POST,
+                &format!("/conversations/{id}"),
+                Some(&body),
+                true,
+            )?;
+            println!("ok");
+        }
+        "messages" | "message-pins" | "message-search" | "message-delta" => {
+            let id: i64 = args[1].parse()?;
+            let suffix = match command {
+                "messages" => "messages",
+                "message-pins" => "pins",
+                "message-search" => "search",
+                _ => "delta",
+            };
+            let mut url =
+                reqwest::Url::parse(&format!("{}/conversations/{id}/{suffix}", cli.base))?;
+            if command == "message-search" {
+                url.query_pairs_mut().append_pair("q", &args[2]);
+            }
+            for (env, key) in [
+                ("PORCH_BEFORE", "before"),
+                ("PORCH_AFTER", "after"),
+                ("PORCH_THROUGH", "through"),
+                ("PORCH_LIMIT", "limit"),
+            ] {
+                if let Ok(value) = env::var(env) {
+                    let n: i64 = value.parse()?;
+                    url.query_pairs_mut().append_pair(key, &n.to_string());
+                }
+            }
+            let path = format!(
+                "{}{}",
+                url.path(),
+                url.query().map(|q| format!("?{q}")).unwrap_or_default()
+            );
+            cli.read::<MessagePage>(&path)?;
+        }
+        "message-send" => {
+            let id: i64 = args[1].parse()?;
+            let body: SendMessage = serde_json::from_str(&env::var("PORCH_MESSAGE")?)?;
+            let out: Message = cli
+                .request(
+                    Method::POST,
+                    &format!("/conversations/{id}/messages"),
+                    Some(&body),
+                    true,
+                )?
+                .json()?;
+            print_json(&out)?;
+        }
+        "message-mutate" => {
+            let id: i64 = args[1].parse()?;
+            let message: i64 = args[2].parse()?;
+            let body: MessageCommand = serde_json::from_str(&env::var("PORCH_COMMAND")?)?;
+            let out: Message = cli
+                .request(
+                    Method::POST,
+                    &format!("/conversations/{id}/messages/{message}"),
+                    Some(&body),
+                    true,
+                )?
+                .json()?;
+            print_json(&out)?;
+        }
+        "message-read" => {
+            let id: i64 = args[1].parse()?;
+            let body = MarkRead {
+                message_id: args[2].parse()?,
+            };
+            cli.request(
+                Method::POST,
+                &format!("/conversations/{id}/read"),
+                Some(&body),
+                true,
+            )?;
+            println!("ok");
         }
         "gateway" => {
             gateway(&cli.base)?;

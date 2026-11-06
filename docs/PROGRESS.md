@@ -37,3 +37,21 @@ never replace branding task files. Load frontend-design before UI coding, write
 a design ADR, build Linux/Windows artifacts or honestly document build blockers.
 Headless screenshots where feasible; graphical acceptance belongs to Dylan alone.
 Before every push, safely commit local work then pull --rebase to preserve branding.
+
+Phase 4 implementation commits 7fa6b31 (shared messaging/sync contracts) and
+4aad12a (Postgres persistence, authorized HTTP, DM lifecycle, isolated integration).
+CLI proof and docs follow. Local fmt/clippy/build/workspace tests passed, 25 default
+tests and 6 ignored integration/load tests, including 256 sanitizer property cases
+and 5 permission properties with 512 cases each. Actual CLI identity+community+
+messaging HTTP smoke passed. A 20k synthetic-row FTS warm serial benchmark measured
+12.873ms p50 / 14.664ms p95 over 50 authorized full-HTTP calls in the debug build,
+not production/concurrent capacity. Local build cache exhausted disk; only this
+repo's generated target was cleaned, then all tests rebuilt without debuginfo.
+
+Phase 4 hosted CI is pending. No Phase 5 implementation begins until it is green.
+See docs/messaging.md and ADR-0005 for bounds, tombstone/sanitizer semantics,
+revision paging and known boundaries. No outbox/cross-node guarantees, no E2EE,
+no group consent/blocking, no real-user or deployment acceptance yet. Phase 2
+presence/typing remains platform-level (no channel/content identifiers); scoped
+conversation typing is not a Phase 4 claim. No UI, deployment or infrastructure
+changes were made.

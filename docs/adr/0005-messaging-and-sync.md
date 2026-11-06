@@ -9,8 +9,9 @@ community aggregate. DM participant lists are bounded. Encryption is a tagged
 content seam only; encrypted payloads fail closed until keys/protocol are designed.
 No E2EE claim. No code reused from old applications.
 
-Message mutation lock order is community (when present), conversation, then
-message. DMs never take community locks. Authorization and mutation share a
+Message mutation lock order is community (when present, FOR SHARE), conversation
+(FOR UPDATE), then message. The shared community lock blocks authorization edits
+without serializing unrelated channels. DMs never take community locks. Authorization and mutation share a
 transaction; reads use a repeatable-read snapshot rather than a write lock.
 No stale permission cache is trusted. This supersedes ADR-0004's proposed cache
 requirement: the JSON aggregate at this scale is cheaper than a revocation hole.
@@ -44,5 +45,17 @@ execute source HTML. Search authenticates before querying, is conversation-scope
 and excludes deleted bodies, with no unauthorized counts/snippets. Read cursors
 are monotonic, validated against a visible same-conversation message.
 
-Bounds and rate limits, error semantics, retention and measured search performance
-will be recorded with the finished implementation. No deployment or UI changes.
+Read-cursor writes also lock the conversation but do not bump its message revision;
+private wakeups refresh head/read state. Reactions do bump revisions under the same
+conversation lock as sends, so commit ordering cannot create skipped revisions.
+Writes use READ COMMITTED; only read snapshots use REPEATABLE READ.
+
+1:1 DMs have immutable participants and no moderation-owner privilege. Group DMs
+allow the owner to moderate, rename, add/remove and transfer ownership. Owner
+leave selects the lowest remaining user ID, and the last member leaving deletes
+the conversation. A group may shrink to one member; it remains a group, never
+changes into the unique-pair DM. Added members can read existing group history.
+No blocking, per-recipient consent or DM hide operation exists in this phase.
+
+No deployment or UI changes. Bounds, API, retention and measured search results
+are in docs/messaging.md.

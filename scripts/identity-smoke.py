@@ -83,6 +83,26 @@ try:
     ci = cli("community-invite-create", cid, 2, 3600, PORCH_TOKEN=user_token)
     cli("community-join", PORCH_TOKEN=admin_token, PORCH_COMMUNITY_INVITE=ci["code"])
     assert len(cli("community", cid, PORCH_TOKEN=admin_token)["members"]) == 2
+    conversations = cli("conversations", PORCH_TOKEN=user_token)
+    conversation = next(c["id"] for c in conversations if c["community_id"] == cid)
+    body = {"nonce":"smoke_message_nonce_0001", "content":{"format":"markdown","text":"**hi** searchable"}, "reply_to":None, "mentions":[admin["user"]["id"]]}
+    message = cli("message-send", conversation, PORCH_TOKEN=user_token, PORCH_MESSAGE=json.dumps(body))
+    assert cli("message-send", conversation, PORCH_TOKEN=user_token, PORCH_MESSAGE=json.dumps(body))["id"] == message["id"]
+    assert cli("messages", conversation, PORCH_TOKEN=admin_token)["messages"][0]["id"] == message["id"]
+    assert cli("message-search", conversation, "searchable", PORCH_TOKEN=admin_token)["messages"][0]["id"] == message["id"]
+    def message_mutate(token, **command):
+        return cli("message-mutate", conversation, message["id"], PORCH_TOKEN=token, PORCH_COMMAND=json.dumps(command))
+    message_mutate(admin_token, op="react", emoji="🐈", active=True)
+    message_mutate(user_token, op="pin", pinned=True)
+    assert cli("message-pins", conversation, PORCH_TOKEN=admin_token)["messages"][0]["pinned"]
+    message_mutate(user_token, op="edit", content={"format":"markdown","text":"edited text"}, mentions=[], mention_everyone=False)
+    cli("message-read", conversation, message["id"], PORCH_TOKEN=admin_token)
+    message_mutate(user_token, op="delete")
+    assert cli("message-delta", conversation, PORCH_TOKEN=admin_token, PORCH_AFTER="0")["messages"][0]["deleted"]
+    dm = cli("dm-create", PORCH_TOKEN=user_token, PORCH_COMMAND=json.dumps({"participants":[admin["user"]["id"]],"name":None}))
+    dm_body = {"nonce":"smoke_direct_nonce_0001","content":{"format":"markdown","text":"direct hello"},"reply_to":None}
+    cli("message-send", dm["id"], PORCH_TOKEN=user_token, PORCH_MESSAGE=json.dumps(dm_body))
+    assert cli("messages", dm["id"], PORCH_TOKEN=admin_token)["messages"][0]["content"]["text"] == "direct hello"
     mutate(user_token, op="set_overwrites", channel_id=None, category_id=category,
            overwrites=[{"target":{"kind":"everyone"}, "allow":0, "deny":1}])
     snapshot = cli("community", cid, PORCH_TOKEN=admin_token)
@@ -122,7 +142,7 @@ try:
     cli("register", PORCH_USERNAME="smoke_denied", PORCH_PASSWORD=password, PORCH_INVITE=invite["code"], fail=True)
     cli("logout", PORCH_TOKEN=admin_token)
     cli("me", PORCH_TOKEN=admin_token, fail=True)
-    print("CLI identity + community smoke passed, bootstrap/register/login/invites/session revocation/logout proven over HTTP")
+    print("CLI identity + community + messaging smoke passed, bootstrap/register/login/invites/session revocation/logout proven over HTTP")
 finally:
     server.terminate()
     server.communicate(timeout=10)
