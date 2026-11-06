@@ -1,8 +1,10 @@
+mod design;
 mod media;
 use crate::{
     session::{Bridge, Command, Snapshot},
     settings::Settings,
 };
+use design::*;
 use gpui::{prelude::*, *};
 use gpui_component::{
     Disableable, Selectable, Sizable,
@@ -11,7 +13,11 @@ use gpui_component::{
 };
 use porch_core::SendState;
 use porch_protocol::*;
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+    sync::Arc,
+};
 
 const PAGE: u32 = 0x111210;
 const SURFACE: u32 = 0x191D19;
@@ -42,6 +48,8 @@ pub struct Porch {
     next_send: u64,
     awaiting: Option<(u64, i64, String, bool)>,
     drafts: HashMap<i64, String>,
+    collapsed: HashSet<(i64, i64)>,
+    message_scroll: ScrollHandle,
 }
 fn small(text: impl Into<SharedString>) -> Div {
     div()
@@ -73,8 +81,8 @@ impl Porch {
         });
         let composer = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder("Pull up. Say something.")
-                .auto_grow(2, 6)
+                .placeholder("Message your people…")
+                .auto_grow(1, 6)
         });
         let dm =
             cx.new(|cx| InputState::new(window, cx).placeholder("Member IDs, separated by commas"));
@@ -127,6 +135,8 @@ impl Porch {
             next_send: 1,
             awaiting: None,
             drafts: HashMap::new(),
+            collapsed: HashSet::new(),
+            message_scroll: ScrollHandle::new(),
         }
     }
     fn receive(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -186,6 +196,9 @@ impl Porch {
         }
         self.drafts
             .retain(|id, _| snapshot.heads.iter().any(|head| head.id == *id));
+        if snapshot.selected != self.snapshot.selected {
+            self.message_scroll.scroll_to_bottom();
+        }
         self.snapshot = snapshot;
         cx.notify();
     }
@@ -327,7 +340,9 @@ impl Porch {
             .child(self.logo())
             .child(
                 Button::new("home")
-                    .label("DM")
+                    .icon(icon("inbox"))
+                    .ghost()
+                    .size(px(46.))
                     .tooltip("Direct messages")
                     .selected(self.community.is_none())
                     .disabled(self.awaiting.is_some() || self.editing.is_some())
@@ -353,28 +368,64 @@ impl Porch {
                     .take(2)
                     .filter_map(|s| s.chars().next())
                     .collect();
-                Button::new(SharedString::from(format!("community-{id}")))
-                    .label(initials)
-                    .tooltip(name)
-                    .selected(self.community == Some(id))
-                    .disabled(self.awaiting.is_some() || self.editing.is_some())
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.community = Some(id);
-                        if let Some(head) = this
-                            .snapshot
-                            .heads
-                            .iter()
-                            .find(|h| h.community_id == Some(id))
-                        {
-                            this.command(Command::Select(head.id), cx);
-                        }
-                        cx.notify()
-                    }))
+                let unread = self
+                    .snapshot
+                    .heads
+                    .iter()
+                    .any(|h| h.community_id == Some(id) && h.unread_count > 0);
+                div()
+                    .relative()
+                    .flex_shrink_0()
+                    .when(self.community == Some(id) || unread, |d| {
+                        d.child(
+                            div()
+                                .absolute()
+                                .left(px(-12.))
+                                .top(px(12.))
+                                .w(px(4.))
+                                .h(px(if self.community == Some(id) { 24. } else { 8. }))
+                                .rounded_full()
+                                .bg(rgb(CREAM)),
+                        )
+                    })
+                    .child(
+                        Button::new(SharedString::from(format!("community-{id}")))
+                            .label(initials)
+                            .size(px(46.))
+                            .rounded(px(16.))
+                            .bg(rgb(if self.community == Some(id) {
+                                0x43533E
+                            } else {
+                                RAISED
+                            }))
+                            .text_color(rgb(if self.community == Some(id) {
+                                AMBER
+                            } else {
+                                CREAM
+                            }))
+                            .tooltip(name)
+                            .selected(self.community == Some(id))
+                            .disabled(self.awaiting.is_some() || self.editing.is_some())
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.community = Some(id);
+                                if let Some(head) = this
+                                    .snapshot
+                                    .heads
+                                    .iter()
+                                    .find(|h| h.community_id == Some(id))
+                                {
+                                    this.command(Command::Select(head.id), cx);
+                                }
+                                cx.notify()
+                            })),
+                    )
             }))
             .child(div().flex_1())
             .child(
                 Button::new("settings")
-                    .label("Aa")
+                    .icon(icon("settings"))
+                    .ghost()
+                    .size(px(40.))
                     .tooltip("Display and session settings")
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.show_settings = !this.show_settings;
@@ -420,7 +471,8 @@ impl Porch {
                     .child(
                         Button::new("voice-mute")
                             .xsmall()
-                            .label(if muted { "Unmute" } else { "Mute" })
+                            .icon(icon(if muted { "mic-off" } else { "mic" }))
+                            .tooltip(if muted { "Unmute" } else { "Mute" })
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.command(
                                     Command::VoiceFlags {
@@ -436,7 +488,8 @@ impl Porch {
                     .child(
                         Button::new("voice-deafen")
                             .xsmall()
-                            .label(if deafened { "Listen" } else { "Deafen" })
+                            .icon(icon("headphones"))
+                            .tooltip(if deafened { "Undeafen" } else { "Deafen" })
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.command(
                                     Command::VoiceFlags {
@@ -449,11 +502,15 @@ impl Porch {
                                 );
                             })),
                     )
-                    .child(Button::new("voice-leave").xsmall().label("Leave").on_click(
-                        cx.listener(|this, _, _, cx| {
-                            this.command(Command::VoiceLeave, cx);
-                        }),
-                    )),
+                    .child(
+                        Button::new("voice-leave")
+                            .xsmall()
+                            .icon(icon("leave"))
+                            .tooltip("Disconnect")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.command(Command::VoiceLeave, cx);
+                            })),
+                    ),
             )
             .child(
                 Button::new("voice-ptt")
@@ -541,7 +598,32 @@ impl Porch {
         if let Some(c) = community {
             for category in std::iter::once(None).chain(c.categories.iter().map(Some)) {
                 if let Some(category) = category {
-                    list = list.child(small(category.name.clone()).mt_4());
+                    let key = (c.community.id, category.id);
+                    let collapsed = self.collapsed.contains(&key);
+                    list = list.child(
+                        Button::new(SharedString::from(format!("category-{}-{}", key.0, key.1)))
+                            .ghost()
+                            .xsmall()
+                            .w_full()
+                            .justify_start()
+                            .mt_4()
+                            .icon(icon(if collapsed {
+                                "chevron-right"
+                            } else {
+                                "chevron-down"
+                            }))
+                            .label(category.name.to_uppercase())
+                            .text_color(rgb(MUTED))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                if !this.collapsed.remove(&key) {
+                                    this.collapsed.insert(key);
+                                }
+                                cx.notify();
+                            })),
+                    );
+                    if collapsed {
+                        continue;
+                    }
                 }
                 let cat = category.map(|c| c.id);
                 for channel in c.channels.iter().filter(|ch| ch.category_id == cat) {
@@ -558,7 +640,11 @@ impl Porch {
                                 "voice-{}-{}",
                                 ch.community_id, ch.channel_id
                             )))
-                            .label(format!("◌ {}", channel.name))
+                            .ghost()
+                            .w_full()
+                            .justify_start()
+                            .icon(icon("volume"))
+                            .label(channel.name.clone())
                             .selected(self.snapshot.voice.channel == Some(ch))
                             .on_click(cx.listener(
                                 move |this, _, _, cx| {
@@ -566,6 +652,27 @@ impl Porch {
                                 },
                             )),
                         );
+                        if self.snapshot.voice.channel == Some(ch) {
+                            for participant in &self.snapshot.voice.participants {
+                                list = list.child(
+                                    div()
+                                        .ml_5()
+                                        .py_1()
+                                        .flex()
+                                        .items_center()
+                                        .gap_2()
+                                        .child(avatar(
+                                            participant.user_id,
+                                            &self.member_name(participant.user_id),
+                                            24.,
+                                        ))
+                                        .child(small(self.member_name(participant.user_id)))
+                                        .when(participant.flags.speaking, |d| {
+                                            d.child(icon("volume").text_color(rgb(0x91BC99)))
+                                        }),
+                                );
+                            }
+                        }
                         continue;
                     }
                     if let Some(head) = head {
@@ -620,7 +727,7 @@ impl Porch {
             );
         }
         div()
-            .w(px(254.))
+            .w(px(264.))
             .flex_shrink_0()
             .h_full()
             .bg(rgb(SURFACE))
@@ -630,7 +737,7 @@ impl Porch {
             .flex_col()
             .child(
                 div()
-                    .h(px(76.))
+                    .h(px(64.))
                     .px_5()
                     .flex()
                     .items_center()
@@ -640,40 +747,23 @@ impl Porch {
             )
             .child(list)
             .child(self.voice_shelf(cx))
-            .child(
-                div()
-                    .p_4()
-                    .bg(rgb(RAISED))
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .child(heading(
-                        self.snapshot
-                            .user
-                            .as_ref()
-                            .map(|u| u.username.clone())
-                            .unwrap_or_default(),
-                    ))
-                    .child(small(format!(
-                        "{} · member #{}",
-                        self.snapshot.state,
-                        self.snapshot
-                            .user
-                            .as_ref()
-                            .map(|u| u.id)
-                            .unwrap_or_default()
-                    ))),
-            )
+            .child(self.user_panel(cx))
     }
+
     fn channel_button(&self, head: &ConversationHead, cx: &mut Context<Self>) -> Button {
         let id = head.id;
         let label = if head.unread_count > 0 {
-            format!("# {}   {}", head.name, head.unread_count)
+            format!("{}   {}", head.name, head.unread_count)
         } else {
-            format!("# {}", head.name)
+            head.name.clone()
         };
         Button::new(SharedString::from(format!("channel-{id}")))
             .ghost()
+            .icon(icon(if head.community_id.is_some() {
+                "hash"
+            } else {
+                "user"
+            }))
             .label(label)
             .selected(self.snapshot.selected == Some(id))
             .disabled(self.awaiting.is_some() || self.editing.is_some())
@@ -683,16 +773,10 @@ impl Porch {
                 this.command(Command::Select(id), cx);
             }))
     }
-    fn message(&self, message: &Message, cx: &mut Context<Self>) -> Div {
+    fn message(&self, message: &Message, grouped: bool, cx: &mut Context<Self>) -> Div {
         let id = message.id;
         let conversation = message.conversation_id;
-        let author = self
-            .snapshot
-            .user
-            .as_ref()
-            .filter(|u| u.id == message.author_id)
-            .map(|u| u.username.clone())
-            .unwrap_or_else(|| format!("Member #{}", message.author_id));
+        let author = self.member_name(message.author_id);
         let text = match &message.content {
             Some(MessageContent::Markdown { text }) => text.clone(),
             _ => "[message removed]".into(),
@@ -703,24 +787,20 @@ impl Porch {
             .as_ref()
             .is_some_and(|u| u.id == message.author_id);
         let mut row = div()
+            .flex_shrink_0()
+            .group("message")
+            .relative()
             .px_6()
-            .py_3()
+            .py_1()
+            .mt(if grouped { px(0.) } else { px(16.) })
+            .hover(|d| d.bg(rgb(0x1C211C)))
             .flex()
             .gap_3()
-            .border_b_1()
-            .border_color(rgb(0x202720))
-            .child(
-                div()
-                    .size(px(34.))
-                    .flex_shrink_0()
-                    .rounded_lg()
-                    .bg(rgb(RAISED))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .text_color(rgb(AMBER))
-                    .child(author.chars().next().unwrap_or('?').to_string()),
-            )
+            .child(if grouped {
+                div().w(px(38.)).flex_shrink_0()
+            } else {
+                avatar(message.author_id, &author, 38.)
+            })
             .child(
                 div()
                     .flex_1()
@@ -728,19 +808,18 @@ impl Porch {
                     .flex()
                     .flex_col()
                     .gap_1()
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .min_w_0()
-                            .gap_1()
-                            .w_full()
-                            .overflow_hidden()
-                            .child(heading(author).whitespace_normal())
-                            .child(small(message.created_at.clone()).whitespace_normal())
-                            .when(message.edited_at.is_some(), |d| d.child(small("edited")))
-                            .when(message.pinned, |d| d.child(small("pinned"))),
-                    )
+                    .when(!grouped, |d| {
+                        d.child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_3()
+                                .child(heading(author).text_size(px(14.)))
+                                .child(small(clock(&message.created_at)).text_size(px(11.)))
+                                .when(message.edited_at.is_some(), |d| d.child(small("edited")))
+                                .when(message.pinned, |d| d.child(icon("pin"))),
+                        )
+                    })
                     .when(message.reply_to.is_some(), |d| {
                         d.child(small(format!(
                             "Reply to message #{}",
@@ -764,14 +843,22 @@ impl Porch {
             row = row.child(
                 div()
                     .flex()
-                    .flex_shrink_0()
-                    .flex_col()
+                    .absolute()
+                    .right_4()
+                    .top(px(-12.))
+                    .bg(rgb(RAISED))
+                    .rounded_lg()
+                    .border_1()
+                    .border_color(rgb(BORDER))
+                    .invisible()
+                    .group_hover("message", |d| d.visible())
                     .gap_1()
                     .child(
                         Button::new(SharedString::from(format!("reply-{id}")))
                             .ghost()
                             .xsmall()
-                            .label("Reply")
+                            .icon(icon("reply"))
+                            .tooltip("Reply")
                             .disabled(self.awaiting.is_some() || self.editing.is_some())
                             .on_click(cx.listener(move |this, _, window, cx| {
                                 this.reply = Some(id);
@@ -784,7 +871,7 @@ impl Porch {
                         Button::new(SharedString::from(format!("react-{id}")))
                             .ghost()
                             .xsmall()
-                            .label("+1")
+                            .icon(icon("heart"))
                             .tooltip("Toggle a thumbs-up reaction")
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 let active = !this
@@ -820,7 +907,8 @@ impl Porch {
                             Button::new(SharedString::from(format!("edit-{id}")))
                                 .ghost()
                                 .xsmall()
-                                .label("Edit")
+                                .icon(icon("edit"))
+                                .tooltip("Edit message")
                                 .disabled(self.awaiting.is_some() || self.editing.is_some())
                                 .on_click(cx.listener(move |this, _, window, cx| {
                                     this.editing = Some(id);
@@ -862,7 +950,7 @@ impl Porch {
         panel = panel
             .child(
                 div()
-                    .h(px(76.))
+                    .h(px(64.))
                     .flex_shrink_0()
                     .px_6()
                     .flex()
@@ -875,13 +963,15 @@ impl Porch {
                             .flex()
                             .flex_col()
                             .gap_1()
-                            .child(heading(format!("# {}", head.name)))
-                            .child(small("Your people. Your place.")),
+                            .child(heading(head.name.clone()))
+                            .child(small("Pull up. Talk awhile.")),
                     ),
             )
             .child(
                 div()
                     .id(("messages", head.id as u64))
+                    .track_scroll(&self.message_scroll)
+                    .pb_5()
                     .flex_1()
                     .min_h_0()
                     .overflow_y_scroll()
@@ -914,14 +1004,18 @@ impl Porch {
                                         }
                                     })),
                             )
-                            .child(
-                                small("Plain Markdown · no remote images loaded")
-                                    .min_w_0()
-                                    .flex_1()
-                                    .truncate(),
-                            ),
+                            .child(small("Only your people here").min_w_0().flex_1().truncate()),
                     )
-                    .children(self.snapshot.messages.iter().map(|m| self.message(m, cx)))
+                    .when(self.snapshot.messages.is_empty(), |d| d.child(div().px_6().py_5().flex().flex_col().gap_3()
+                        .child(div().text_size(px(28.)).text_color(rgb(AMBER)).child("A little room for your people."))
+                        .child(small("This conversation starts with you. Pull up a chair and say hello."))))
+                    .children(self.snapshot.messages.iter().enumerate().map(|(i, m)| {
+                        let grouped = i
+                            .checked_sub(1)
+                            .and_then(|n| self.snapshot.messages.get(n))
+                            .is_some_and(|previous| grouped(previous, m));
+                        self.message(m, grouped, cx)
+                    }))
                     .children(
                         self.snapshot
                             .pending
@@ -1031,7 +1125,8 @@ impl Porch {
                             .child(
                                 Button::new("choose-file")
                                     .ghost()
-                                    .label("Choose file")
+                                    .icon(icon("plus"))
+                                    .tooltip("Attach a file")
                                     .disabled(self.editing.is_some() || self.snapshot.busy)
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.choose_file(window, cx)
@@ -1040,10 +1135,11 @@ impl Porch {
                             .child(
                                 Button::new("send")
                                     .primary()
-                                    .label(if self.editing.is_some() {
+                                    .icon(icon("send"))
+                                    .tooltip(if self.editing.is_some() {
                                         "Save edit"
                                     } else {
-                                        "Send"
+                                        "Send message"
                                     })
                                     .disabled(self.awaiting.is_some())
                                     .on_click(
@@ -1060,48 +1156,77 @@ impl Porch {
             .communities
             .iter()
             .find(|c| Some(c.community.id) == self.community);
-        let ids: Vec<_> = if let Some(c) = community {
-            c.members.iter().map(|m| m.user_id).collect()
-        } else {
-            self.snapshot
-                .heads
-                .iter()
-                .find(|h| Some(h.id) == self.snapshot.selected)
-                .map(|h| h.participants.clone())
-                .unwrap_or_default()
-        };
-        div()
+        let mut groups: std::collections::BTreeMap<String, Vec<i64>> =
+            std::collections::BTreeMap::new();
+        if let Some(c) = community {
+            for member in &c.members {
+                let label = if member.user_id == c.community.owner_id {
+                    "Owner".to_string()
+                } else {
+                    c.roles
+                        .iter()
+                        .filter(|r| member.role_ids.contains(&r.id))
+                        .max_by_key(|r| r.position)
+                        .map(|r| r.name.clone())
+                        .unwrap_or_else(|| "Members".into())
+                };
+                groups.entry(label).or_default().push(member.user_id);
+            }
+        } else if let Some(head) = self
+            .snapshot
+            .heads
+            .iter()
+            .find(|h| Some(h.id) == self.snapshot.selected)
+        {
+            groups.insert("In this conversation".into(), head.participants.clone());
+        }
+        let mut panel = div()
             .id("members")
-            .w(px(208.))
+            .w(px(216.))
             .flex_shrink_0()
             .h_full()
             .bg(rgb(SURFACE))
             .border_l_1()
             .border_color(rgb(BORDER))
-            .p_5()
+            .px_4()
+            .py_5()
             .overflow_y_scroll()
             .flex()
             .flex_col()
-            .gap_4()
-            .child(small(format!("MEMBERS · {}", ids.len())))
-            .children(ids.into_iter().map(|id| {
-                let name = self
-                    .snapshot
-                    .user
-                    .as_ref()
-                    .filter(|u| u.id == id)
-                    .map(|u| format!("{} · you", u.username))
-                    .unwrap_or_else(|| format!("Member #{id}"));
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(div().size(px(8.)).rounded_full().bg(rgb(MUTED)))
-                    .child(name)
-            }))
-            .child(small(
-                "Membership, not live presence. Profiles arrive in a later phase.",
-            ))
+            .gap_2();
+        for (role, ids) in groups {
+            panel = panel.child(
+                small(format!("{} · {}", role.to_uppercase(), ids.len()))
+                    .mt_4()
+                    .text_size(px(10.)),
+            );
+            for id in ids {
+                let name = self.member_name(id);
+                panel = panel.child(
+                    div()
+                        .py_2()
+                        .flex()
+                        .items_center()
+                        .gap_3()
+                        .child(avatar(id, &name, 32.))
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .child(div().text_size(px(12.)).child(name))
+                                .when(
+                                    self.snapshot.user.as_ref().is_some_and(|u| u.id == id),
+                                    |d| d.child(small("You").text_size(px(10.))),
+                                ),
+                        ),
+                );
+            }
+        }
+        panel.child(
+            small("Member directory · live presence unavailable")
+                .text_size(px(10.))
+                .mt_4(),
+        )
     }
     fn settings_panel(&self, cx: &mut Context<Self>) -> Div {
         div().p_5().bg(rgb(RAISED)).flex().flex_col().gap_3().border_b_1().border_color(rgb(BORDER))
