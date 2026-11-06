@@ -92,7 +92,7 @@ impl Porch {
             }
         })
         .detach();
-        let subscriptions =
+        let mut subscriptions =
             vec![
                 cx.subscribe_in(&composer, window, |this, _, event, window, cx| {
                     if matches!(event, InputEvent::PressEnter { secondary: false }) {
@@ -100,6 +100,11 @@ impl Porch {
                     }
                 }),
             ];
+        subscriptions.push(cx.observe_window_activation(window, |this, window, cx| {
+            if !window.is_window_active() && this.snapshot.voice.ptt {
+                this.ptt(false, cx);
+            }
+        }));
         Self {
             bridge,
             snapshot,
@@ -185,6 +190,21 @@ impl Porch {
         cx.notify();
     }
     fn command(&mut self, command: Command, cx: &mut Context<Self>) -> bool {
+        match &command {
+            Command::VoiceFlags {
+                muted,
+                deafened,
+                ptt,
+                held,
+            } => self
+                .bridge
+                .gate
+                .allow(!muted && !deafened && (!ptt || *held)),
+            Command::VoiceLeave | Command::VoiceJoin(_) | Command::Logout => {
+                self.bridge.gate.allow(false)
+            }
+            _ => {}
+        }
         match self.bridge.commands.try_send(command) {
             Ok(()) => {
                 self.error = None;
@@ -192,6 +212,7 @@ impl Porch {
                 true
             }
             Err(_) => {
+                self.bridge.gate.allow(false);
                 self.error = Some("Too many pending actions. Try again in a moment.".into());
                 cx.notify();
                 false
@@ -361,6 +382,144 @@ impl Porch {
                     })),
             )
     }
+    fn ptt(&mut self, held: bool, cx: &mut Context<Self>) {
+        let v = &self.snapshot.voice;
+        if v.channel.is_some() && v.ptt {
+            self.command(
+                Command::VoiceFlags {
+                    muted: v.manual_muted,
+                    deafened: v.flags.deafened,
+                    ptt: true,
+                    held,
+                },
+                cx,
+            );
+        }
+    }
+    fn voice_shelf(&self, cx: &mut Context<Self>) -> Div {
+        let v = &self.snapshot.voice;
+        let mut d = div()
+            .px_3()
+            .py_3()
+            .bg(rgb(RAISED))
+            .flex()
+            .flex_col()
+            .gap_2();
+        if v.channel.is_none() {
+            return d.child(small("Find a voice channel. Pull up a chair."));
+        }
+        let muted = v.manual_muted;
+        let deafened = v.flags.deafened;
+        let ptt = v.ptt;
+        d = d
+            .child(heading("On the porch"))
+            .child(
+                div()
+                    .flex()
+                    .gap_1()
+                    .child(
+                        Button::new("voice-mute")
+                            .xsmall()
+                            .label(if muted { "Unmute" } else { "Mute" })
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.command(
+                                    Command::VoiceFlags {
+                                        muted: !muted,
+                                        deafened,
+                                        ptt,
+                                        held: false,
+                                    },
+                                    cx,
+                                );
+                            })),
+                    )
+                    .child(
+                        Button::new("voice-deafen")
+                            .xsmall()
+                            .label(if deafened { "Listen" } else { "Deafen" })
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.command(
+                                    Command::VoiceFlags {
+                                        muted,
+                                        deafened: !deafened,
+                                        ptt,
+                                        held: false,
+                                    },
+                                    cx,
+                                );
+                            })),
+                    )
+                    .child(Button::new("voice-leave").xsmall().label("Leave").on_click(
+                        cx.listener(|this, _, _, cx| {
+                            this.command(Command::VoiceLeave, cx);
+                        }),
+                    )),
+            )
+            .child(
+                Button::new("voice-ptt")
+                    .xsmall()
+                    .selected(ptt)
+                    .label(if ptt {
+                        "Hold F9 to talk · window focused"
+                    } else {
+                        "Enable push-to-talk (F9)"
+                    })
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.command(
+                            Command::VoiceFlags {
+                                muted,
+                                deafened,
+                                ptt: !ptt,
+                                held: false,
+                            },
+                            cx,
+                        );
+                    })),
+            )
+            .children(v.participants.iter().map(|p| {
+                small(format!(
+                    "{} Member {}{}",
+                    if p.flags.speaking { "●" } else { "○" },
+                    p.user_id,
+                    if p.flags.deafened {
+                        " · deafened"
+                    } else if p.flags.muted {
+                        " · muted"
+                    } else {
+                        ""
+                    }
+                ))
+            }));
+        for (input, names, index) in [(true, &v.inputs, v.input), (false, &v.outputs, v.output)] {
+            let n = names.len();
+            let label = format!(
+                "{} · {}",
+                if input { "Mic" } else { "Output" },
+                names
+                    .get(index)
+                    .map(String::as_str)
+                    .unwrap_or("System default")
+            );
+            d = d.child(
+                Button::new(if input { "voice-input" } else { "voice-output" })
+                    .xsmall()
+                    .label(label)
+                    .disabled(n == 0)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if n > 0 {
+                            this.command(
+                                Command::VoiceDevice {
+                                    input,
+                                    index: (index + 1) % n,
+                                },
+                                cx,
+                            );
+                        }
+                    })),
+            );
+        }
+        d
+    }
     fn sidebar(&self, cx: &mut Context<Self>) -> Div {
         let community = self
             .snapshot
@@ -390,7 +549,23 @@ impl Porch {
                         h.community_id == Some(c.community.id) && h.channel_id == Some(channel.id)
                     });
                     if channel.kind == ChannelKind::Voice {
-                        list = list.child(small(format!("◌ {} · voice later", channel.name)));
+                        let ch = VoiceChannel {
+                            community_id: c.community.id,
+                            channel_id: channel.id,
+                        };
+                        list = list.child(
+                            Button::new(SharedString::from(format!(
+                                "voice-{}-{}",
+                                ch.community_id, ch.channel_id
+                            )))
+                            .label(format!("◌ {}", channel.name))
+                            .selected(self.snapshot.voice.channel == Some(ch))
+                            .on_click(cx.listener(
+                                move |this, _, _, cx| {
+                                    this.command(Command::VoiceJoin(ch), cx);
+                                },
+                            )),
+                        );
                         continue;
                     }
                     if let Some(head) = head {
@@ -464,6 +639,7 @@ impl Porch {
                     .child(heading(title.to_string())),
             )
             .child(list)
+            .child(self.voice_shelf(cx))
             .child(
                 div()
                     .p_4()
@@ -948,7 +1124,10 @@ impl Render for Porch {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // Keep the subscriptions alive for the view lifetime.
         let _ = &self.subscriptions;
-        div().size_full().flex().flex_col().font_family("Manrope").text_size(px(self.settings.font_size)).text_color(rgb(CREAM)).bg(rgb(PAGE))
+        div().size_full().flex().flex_col()
+            .on_key_down(cx.listener(|this,e:&KeyDownEvent,_,cx|{if e.keystroke.key=="f9"&&!e.is_held{this.ptt(true,cx);}}))
+            .on_key_up(cx.listener(|this,e:&KeyUpEvent,_,cx|{if e.keystroke.key=="f9"{this.ptt(false,cx);}}))
+            .font_family("Manrope").text_size(px(self.settings.font_size)).text_color(rgb(CREAM)).bg(rgb(PAGE))
             .when(self.snapshot.user.is_some()&&self.show_settings,|d|d.child(self.settings_panel(cx)))
             .when_some(self.error.clone().or_else(||self.snapshot.error.clone()),|d,e|d.child(div().px_5().py_3().bg(rgb(0x45271F)).child(e)))
             .when(self.snapshot.user.is_some()&&self.snapshot.notice.is_some(),|d|d.child(div().p_3().bg(rgb(RAISED)).flex().gap_3()

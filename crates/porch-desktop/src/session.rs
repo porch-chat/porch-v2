@@ -11,6 +11,7 @@ use tokio::sync::mpsc;
 
 #[derive(Clone, Default)]
 pub struct Snapshot {
+    pub voice: crate::voice::View,
     pub generation: u64,
     pub user: Option<User>,
     pub state: String,
@@ -37,6 +38,18 @@ pub enum Command {
         username: String,
         password: String,
         invite: Option<String>,
+    },
+    VoiceJoin(VoiceChannel),
+    VoiceLeave,
+    VoiceFlags {
+        muted: bool,
+        deafened: bool,
+        ptt: bool,
+        held: bool,
+    },
+    VoiceDevice {
+        input: bool,
+        index: usize,
     },
     Select(i64),
     ChooseFile {
@@ -91,6 +104,7 @@ pub enum Command {
     AcknowledgeNotice,
 }
 pub struct Bridge {
+    pub gate: crate::voice::Gate,
     pub commands: mpsc::Sender<Command>,
     pub latest: Arc<Mutex<Arc<Snapshot>>>,
     pub changes: async_channel::Receiver<()>,
@@ -124,6 +138,8 @@ fn cache_path(root: &Path, origin: &str, user: i64) -> PathBuf {
 }
 impl Bridge {
     pub fn start(root: PathBuf) -> Self {
+        let gate = crate::voice::Gate::default();
+        let worker_gate = gate.clone();
         let (tx, rx) = mpsc::channel(32);
         let (changed, changes) = async_channel::bounded(1);
         let latest = Arc::new(Mutex::new(Arc::new(Snapshot {
@@ -135,10 +151,11 @@ impl Bridge {
             .name("porch-session".into())
             .spawn(move || {
                 let runtime = tokio::runtime::Runtime::new().expect("start session runtime");
-                runtime.block_on(worker(root, rx, output, changed));
+                runtime.block_on(worker(root, worker_gate, rx, output, changed));
             })
             .expect("start session worker");
         Self {
+            gate,
             commands: tx,
             latest,
             changes,
@@ -146,6 +163,8 @@ impl Bridge {
     }
 }
 struct Session {
+    gate: crate::voice::Gate,
+    voice: Option<crate::voice::Voice>,
     root: PathBuf,
     engine: Option<Engine>,
     gateway: Option<GatewayTask>,
@@ -160,6 +179,9 @@ impl Session {
         password: String,
         invite: Option<String>,
     ) -> porch_core::Result<()> {
+        if let Some(mut v) = self.voice.take() {
+            v.leave().await;
+        }
         self.gateway.take();
         self.engine.take();
         self.view = Snapshot {
@@ -203,11 +225,26 @@ impl Session {
             return Ok(());
         };
         if engine.is_signed_out() {
+            if let Some(mut v) = self.voice.take() {
+                v.leave().await;
+            }
             let notice = engine.cache().removal_notice().await?;
             self.gateway.take();
             self.engine.take();
             self.view=Snapshot{generation:self.view.generation+1,notice,error:Some("Session ended. Local drafts were removed; some may already have been delivered.".into()),state:"Signed out".into(),..Default::default()};
             return Ok(());
+        }
+        if let Some(v) = self.voice.as_mut() {
+            if let Err(e) = v.tick().await {
+                if let Some(mut v) = self.voice.take() {
+                    v.leave().await;
+                }
+                self.view.voice = Default::default();
+                return Err(e);
+            }
+            self.view.voice = v.view();
+        } else {
+            self.view.voice = Default::default();
         }
         self.view.user = Some(engine.user().clone());
         self.view.heads = engine.cache().heads().await?;
@@ -349,6 +386,35 @@ impl Session {
                 let embed = engine.link_embed(conversation, message, url).await?;
                 self.view.embeds.insert(message, embed);
             }
+            Command::VoiceJoin(channel) => {
+                if let Some(mut v) = self.voice.take() {
+                    v.leave().await;
+                }
+                self.voice = Some(
+                    crate::voice::Voice::join(engine.api().clone(), channel, self.gate.clone())
+                        .await?,
+                );
+            }
+            Command::VoiceLeave => {
+                if let Some(mut v) = self.voice.take() {
+                    v.leave().await;
+                }
+            }
+            Command::VoiceFlags {
+                muted,
+                deafened,
+                ptt,
+                held,
+            } => {
+                if let Some(v) = self.voice.as_mut() {
+                    v.flags(muted, deafened, ptt, held).await?;
+                }
+            }
+            Command::VoiceDevice { input, index } => {
+                if let Some(v) = self.voice.as_mut() {
+                    v.device(input, index)?;
+                }
+            }
             Command::Select(id) => {
                 if !self.view.heads.iter().any(|h| h.id == id) {
                     return Err(porch_core::Error::InvalidData);
@@ -453,6 +519,9 @@ impl Session {
                 engine.flush().await?;
             }
             Command::Logout => {
+                if let Some(mut v) = self.voice.take() {
+                    v.leave().await;
+                }
                 self.gateway.take();
                 let result = engine.logout().await;
                 let notice = engine.cache().removal_notice().await?;
@@ -480,11 +549,14 @@ fn publish(view: &Snapshot, output: &Mutex<Arc<Snapshot>>, changed: &async_chann
 }
 async fn worker(
     root: PathBuf,
+    gate: crate::voice::Gate,
     mut commands: mpsc::Receiver<Command>,
     output: Arc<Mutex<Arc<Snapshot>>>,
     changed: async_channel::Sender<()>,
 ) {
     let mut session = Session {
+        gate,
+        voice: None,
         root,
         engine: None,
         gateway: None,
@@ -510,7 +582,7 @@ async fn worker(
     loop {
         tokio::select! {
             command=commands.recv()=>{
-                let Some(command)=command else{break};
+                let Some(command)=command else{if let Some(mut v)=session.voice.take(){v.leave().await;}break};
                 session.view.busy=true;session.view.error=None;
                 publish(&session.view,&output,&changed);
                 if let Err(e)=session.command(command).await{session.view.error=Some(e.to_string());}

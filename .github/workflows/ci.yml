@@ -32,7 +32,13 @@ jobs:
       - name: Install pinned Rust toolchain
         run: rustup show active-toolchain
       - name: Install Linux desktop libraries
-        run: sudo apt-get update && sudo apt-get install -y libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb1-dev libasound2-dev libfontconfig1-dev libssl-dev libvulkan1 fonts-dejavu-core mesa-vulkan-drivers xvfb openbox xdotool imagemagick ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb1-dev libasound2-dev libglib2.0-dev libfontconfig1-dev libssl-dev libvulkan1 fonts-dejavu-core mesa-vulkan-drivers xvfb openbox xdotool imagemagick ffmpeg
+      - name: Native WebRTC clang 21 toolchain
+        run: |
+          wget -q https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 21
+          echo "CXX=clang++-21" >> "$GITHUB_ENV"
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
         with:

@@ -217,3 +217,12 @@ passed including authentication, private channel denial, duplicate joins, sessio
 isolation, deafen normalization, RPC failure retry and session revocation.
 Native media/UI, hosted CI and isolated deployment remain pending. Deployment
 runbook is docs/deploy/phase8.md. No public DNS change authorized or performed.
+
+Phase 8 native implementation checkpoint: official LiveKit native audio adapter
+now wired into desktop join/leave, mic mute, deafen, device cycling, focused F9
+push-to-talk and participant/speaking display. UI-side synchronous track gate
+silences on release/mute even when session worker is busy. New media starts muted.
+Native cargo check passed with clang 21 + GLib; full workspace checks and hosted
+Linux/Windows acceptance still pending. Isolated backend 11a4cfb deployed and real
+control-plane smoke passed; public API hostname conflicts with old Fluxer route,
+so no existing service route was changed. DNS voice added, api already correct.

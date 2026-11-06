@@ -40,3 +40,30 @@ retaining PostgreSQL/files/secrets/evidence and leaving all existing services al
 Do not prune Docker or delete any data. Fresh deployments can simply stop these
 three containers. Later upgrades require pg_dump first and a prior immutable
 server image tag; do not assume schema downgrade safety.
+
+## Execution record, 2026-11-06
+
+Backend commit 11a4cfb deployed after all four local workspace checks and the
+explicit disposable-Postgres voice test passed. New compose directory/project as
+above, rollback.sh present and executable, persistent data retained. Existing
+container ID/name inventory comparison passed unchanged. No shared config edited.
+Runtime uses an Ubuntu 24.04 image around the exact locally checked debug server
+binary (glibc-compatible); source-build bookworm skeleton was not used. Runtime
+image sha256:56ade0b86cf36a6a05ecabb214f468639b0f7e6232571b56894964f406d251ee.
+Postgres pinned sha256:665dc7b37ac52a17e298511414c21d23ffa4e6a6ef6225b3e5d59c7afb35e994.
+LiveKit 1.13.11 pinned sha256:25cd902de7cacbd5f1f779f6a6ac1eae20ba8f56b0935934ce6b0ab80d1e3d20.
+Real HTTP smoke passed login, community/channel creation, real LiveKit room RPC,
+ticket minting, flags/deafen normalization, authorized snapshot, leave and logout.
+This is control-plane evidence, NOT successful microphone/audio transport proof.
+Administrator username dylan; generated password is host-only admin-password mode
+0600, not in source, logs, CLI args or this document. LiveKit config root-owned 0600
+because all capabilities are dropped. Native hardware acceptance remains pending.
+LiveKit warns about host UDP socket buffer size; no global sysctl was changed.
+
+Dylan approved the two DNS records. api.porch.chat already pointed to
+40.160.53.64 (record 6a556647f612953c68a1bb98eaf6c1b2, TTL 60, DNS-only),
+so it was not changed. voice.porch.chat A 40.160.53.64 was added DNS-only TTL
+300 (record 51abb4d58f0b706651838329f6048890). No other DNS records changed.
+The API hostname is already claimed by existing fluxer-caddy-1 Traefik router
+porch-api. Do not silently override it. Requested separate approval to repoint that
+route or choose v2-api.porch.chat. Until resolved, public API attachment is blocked.

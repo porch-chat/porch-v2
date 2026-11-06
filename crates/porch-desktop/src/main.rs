@@ -2,6 +2,7 @@
 mod session;
 mod settings;
 mod view;
+mod voice;
 use gpui::{prelude::*, *};
 use gpui_component::{Root, Theme, ThemeMode};
 use std::borrow::Cow;
