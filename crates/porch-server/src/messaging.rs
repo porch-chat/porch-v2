@@ -86,7 +86,7 @@ fn throttle(rate: &Mutex<HashMap<i64, (Instant, u32)>>, user: i64) -> Result<()>
     Ok(())
 }
 
-struct Context {
+pub(crate) struct Context {
     id: i64,
     community: Option<Community>,
     channel: Option<i64>,
@@ -98,7 +98,7 @@ struct Context {
     bits: u64,
 }
 impl Context {
-    fn require(&self, bits: u64) -> Result<()> {
+    pub(crate) fn require(&self, bits: u64) -> Result<()> {
         if self.bits & bits == bits {
             Ok(())
         } else {
@@ -126,7 +126,12 @@ impl Context {
         }
     }
 }
-async fn context(conn: &mut PgConnection, id: i64, user: i64, write: bool) -> Result<Context> {
+pub(crate) async fn context(
+    conn: &mut PgConnection,
+    id: i64,
+    user: i64,
+    write: bool,
+) -> Result<Context> {
     // Unlocked lookup only chooses the lock order. Recheck the row after locks.
     let cid: Option<i64> = sqlx::query_scalar("SELECT community_id FROM conversations WHERE id=$1")
         .bind(id)
@@ -237,6 +242,13 @@ async fn persist(conn: &mut PgConnection, m: &Message) -> Result<()> {
     sqlx::query("UPDATE messages SET data=$3,source=$4,deleted=$5,mentions=$6,mention_everyone=$7,pinned=$8,revision=$9 WHERE conversation_id=$1 AND id=$2")
         .bind(m.conversation_id).bind(m.id).bind(serde_json::to_value(m).map_err(|_|err(ErrorCode::Internal))?).bind(source).bind(m.deleted).bind(&m.mentions).bind(m.mention_everyone).bind(m.pinned).bind(m.revision).execute(conn).await?;
     Ok(())
+}
+fn message_html(value: &MessageContent, has_attachments: bool) -> Result<String> {
+    if has_attachments && matches!(value, MessageContent::Markdown{text} if text.is_empty()) {
+        Ok(String::new())
+    } else {
+        content(value)
+    }
 }
 fn content(content: &MessageContent) -> Result<String> {
     let MessageContent::Markdown { text } = content else {
@@ -449,7 +461,7 @@ async fn send(
     let (u, _) = authenticate(&s.identity, &h).await?;
     s.throttle(u.id)?;
     validate_nonce(&body.nonce)?;
-    let html = content(&body.content)?;
+    let html = message_html(&body.content, !body.attachments.is_empty())?;
     let fingerprint = digest(&serde_json::to_string(&body).map_err(|_| invalid())?);
     let mut tx = s.pool.begin().await?;
     let ctx = context(&mut tx, id, u.id, true).await?;
@@ -470,7 +482,10 @@ async fn send(
     let revision = bump(&mut tx, id).await?;
     let row=sqlx::query("INSERT INTO messages(conversation_id,author_id,nonce,fingerprint,reply_to,data,revision) VALUES($1,$2,$3,$4,$5,'{}',$6) RETURNING id,created_at::text")
         .bind(id).bind(u.id).bind(&body.nonce).bind(fingerprint).bind(body.reply_to).bind(revision).fetch_one(&mut *tx).await?;
+    let attachments =
+        crate::files::bind_attachments(&mut tx, &body.attachments, u.id, id, row.get("id")).await?;
     let m = Message {
+        attachments,
         id: row.get("id"),
         conversation_id: id,
         author_id: u.id,
@@ -524,7 +539,7 @@ async fn change(
             }
             ctx.require(SEND_MESSAGES)?;
             mentions(&ctx, &users, mention_everyone)?;
-            m.rendered_html = Some(content(&body)?);
+            m.rendered_html = Some(message_html(&body, !m.attachments.is_empty())?);
             m.content = Some(body);
             m.mentions = users;
             m.mention_everyone = mention_everyone;
@@ -538,6 +553,7 @@ async fn change(
             if m.author_id != u.id {
                 ctx.require(MANAGE_MESSAGES)?;
             }
+            m.attachments.clear();
             m.content = None;
             m.rendered_html = None;
             m.mentions.clear();

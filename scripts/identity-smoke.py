@@ -27,6 +27,7 @@ assert subprocess.run([server_bin, "bootstrap-admin"], env=env, capture_output=T
 with socket.socket() as sock:
     sock.bind(("127.0.0.1", 0))
     port = sock.getsockname()[1]
+env["PORCH_STORAGE_ROOT"] = str(Path(cache_dir.name) / "objects")
 env.update(PORCH_BIND=f"127.0.0.1:{port}", PORCH_URL=f"http://127.0.0.1:{port}")
 # Bootstrap variables are not passed to the long-running server.
 env.pop("PORCH_BOOTSTRAP_USERNAME")
@@ -119,6 +120,39 @@ try:
     assert not cli("core-cache", **core_env)["pending"]
     cli("core-sync", **core_env)
     assert any(m["nonce"] == queued["nonce"] for m in cli("core-messages", dm["id"], **core_env))
+    # Phase 7 actual CLI creation -> interrupted raw chunk -> new-process resume.
+    import hashlib
+    payload = secrets.token_bytes(4 * 1024 * 1024 + 317)
+    source = Path(cache_dir.name) / "large.bin"
+    source.write_bytes(payload)
+    transfer = cli("file-create", dm["id"], source, PORCH_TOKEN=user_token)
+    upload_id = transfer["id"]
+    first = urllib.request.Request(env["PORCH_URL"] + f"/uploads/{upload_id}/chunks?offset=0",
+        data=payload[:4 * 1024 * 1024], method="POST",
+        headers={"Authorization":f"Bearer {user_token}", "Content-Type":"application/octet-stream"})
+    with urllib.request.urlopen(first, timeout=10) as response:
+        assert json.load(response)["received"] == 4 * 1024 * 1024
+    assert cli("file-status", upload_id, PORCH_TOKEN=user_token)["received"] == 4 * 1024 * 1024
+    ready = cli("file-resume", upload_id, source, PORCH_TOKEN=user_token)
+    assert ready["state"] == "ready" and ready["received"] == len(payload)
+    assert ready["sha256"] == hashlib.sha256(payload).hexdigest()
+    command = {"nonce":"file_cli_smoke_nonce1", "content":{"format":"markdown","text":""},
+               "reply_to":None,"mentions":[],"mention_everyone":False,"attachments":[upload_id]}
+    attached = cli("message-send", dm["id"], PORCH_TOKEN=user_token, PORCH_MESSAGE=json.dumps(command))
+    assert attached["attachments"][0]["id"] == upload_id
+    target = Path(cache_dir.name) / "download.bin"
+    assert cli("file-download", upload_id, target, PORCH_TOKEN=admin_token) == "ok"
+    assert target.read_bytes() == payload
+    cli("file-download", upload_id, target, PORCH_TOKEN=admin_token, fail=True)
+    assert target.read_bytes() == payload  # existing file was never overwritten
+    small = Path(cache_dir.name) / "small.bin"
+    small.write_bytes(b"small direct upload")
+    pending = cli("file-upload", dm["id"], small, PORCH_TOKEN=user_token)
+    assert pending["state"] == "ready"
+    cli("file-abort", pending["id"], PORCH_TOKEN=user_token)
+    cli("file-status", pending["id"], PORCH_TOKEN=user_token, fail=True)
+    cli("core-sync", **core_env)
+    assert any(m["attachments"] for m in cli("core-messages", dm["id"], **core_env))
     watched = cli("core-watch", **core_env, PORCH_WATCH_SECONDS="1")
     assert "Online" in watched["states"]
     mutate(user_token, op="set_overwrites", channel_id=None, category_id=category,

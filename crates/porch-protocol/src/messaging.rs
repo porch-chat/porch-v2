@@ -16,6 +16,8 @@ pub enum MessageContent {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SendMessage {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<String>,
     pub nonce: String,
     pub content: MessageContent,
     pub reply_to: Option<i64>,
@@ -31,6 +33,8 @@ pub struct Reaction {
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Message {
+    #[serde(default)]
+    pub attachments: Vec<crate::Attachment>,
     pub id: i64,
     pub conversation_id: i64,
     pub author_id: i64,

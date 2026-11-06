@@ -381,6 +381,7 @@ mod tests {
     }
     fn message(revision: i64) -> Message {
         Message {
+            attachments: vec![],
             id: 1,
             conversation_id: 1,
             author_id: 1,
@@ -406,6 +407,7 @@ mod tests {
     }
     fn request() -> SendMessage {
         SendMessage {
+            attachments: vec![],
             nonce: "nonce_test_0000001".into(),
             content: MessageContent::Markdown {
                 text: "hello".into(),

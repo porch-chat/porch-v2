@@ -41,22 +41,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         porch_server::communities::CommunityService::new(pool.clone(), state.clone(), bus.clone());
     let messaging =
         porch_server::messaging::MessagingService::new(pool.clone(), state.clone(), bus);
+    let files = match std::env::var_os("PORCH_STORAGE_ROOT") {
+        Some(root) => Some(porch_server::files::FileService::new(
+            pool.clone(),
+            state.clone(),
+            std::sync::Arc::new(porch_server::storage::LocalStorage::new(
+                std::path::Path::new(&root),
+            )?),
+        )),
+        None => None,
+    };
+    let mut app = router()
+        .merge(porch_server::identity::routes(state.clone()))
+        .merge(gateway.routes())
+        .merge(communities.routes())
+        .merge(messaging.routes());
+    if let Some(files) = files {
+        app = app.merge(files.routes());
+    }
     let listener = tokio::net::TcpListener::bind(config.bind).await?;
     tracing::info!(address = %listener.local_addr()?, "Porch listening");
-    axum::serve(
-        listener,
-        router()
-            .merge(porch_server::identity::routes(state.clone()))
-            .merge(gateway.routes())
-            .merge(communities.routes())
-            .merge(messaging.routes()),
-    )
-    .with_graceful_shutdown(async {
-        if let Err(error) = tokio::signal::ctrl_c().await {
-            tracing::error!(%error, "shutdown signal failed");
-        }
-    })
-    .await?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(async {
+            if let Err(error) = tokio::signal::ctrl_c().await {
+                tracing::error!(%error, "shutdown signal failed");
+            }
+        })
+        .await?;
     pool.close().await;
     Ok(())
 }

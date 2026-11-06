@@ -1,3 +1,4 @@
+mod files;
 use porch_protocol::*;
 use reqwest::{
     Method,
@@ -93,6 +94,9 @@ fn run() -> Result<()> {
             .build()?,
         base: base.trim_end_matches('/').into(),
     };
+    if command.starts_with("file-") {
+        return files::command(&cli, &args);
+    }
     let expected = match command {
         "invite-create" | "message-mutate" | "message-search" | "message-read" => 3,
         "messages" | "message-send" | "message-delta" | "message-pins" | "dm-mutate" => 2,

@@ -20,9 +20,10 @@ tempfile = "3"
 infer = { version = "0.22", default-features = false }
 tokio-util = { version = "0.7", features = ["io"] }
 
+futures-util.workspace = true
+
 [dev-dependencies]
 proptest = "1.12"
-futures-util.workspace = true
 tokio-tungstenite.workspace = true
 tower.workspace = true
 

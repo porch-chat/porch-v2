@@ -9,6 +9,7 @@ porch-core.workspace = true
 porch-protocol.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2 = "0.10"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 
 tokio.workspace = true

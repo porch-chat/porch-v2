@@ -221,6 +221,7 @@ impl Engine {
         OsRng.fill_bytes(&mut bytes);
         let nonce = bytes.iter().map(|b| format!("{b:02x}")).collect();
         let request = SendMessage {
+            attachments: vec![],
             nonce,
             content,
             reply_to,

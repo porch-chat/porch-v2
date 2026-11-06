@@ -109,3 +109,20 @@ invalid legacy preferences on load. Local checks now pass 37 default tests plus
 8 ignored Postgres/integration/load tests. Native smoke passed against a fresh
 empty local database. Initial cross-platform hosted build is still running;
 do not start Phase 7 or claim Windows acceptance before it passes.
+
+Phase 6 final hosted run 42184052969 passed Linux and Windows at dbdcac9.
+Native Linux headless interactive login/composer smoke passed; actual hardware,
+Windows runtime, DPI and IME acceptance remain separate Dylan checks.
+
+Phase 7 in progress, not complete. Storage contracts and atomic private local
+storage landed first. Backend now has scoped resumable 1 GiB uploads with 4 MiB
+chunks, digest finalization, ownership/live authorization, quota/TTL handling,
+transactional attachment binding and authenticated streamed ranged downloads.
+CLI upload/create/resume/status/abort/download drives the actual endpoints.
+Local fmt/clippy/workspace tests/build pass, including all 10 explicitly ignored
+integration tests and the actual 1 GiB streaming storage test. Fresh-database
+CLI smoke proves interrupted upload plus new-process resume, attachment-only
+send, byte-exact download and overwrite refusal. This is backend/CLI evidence,
+not the full phase. Shared-core durable transfers, image/video previews,
+guarded server-side embeds and native attachment UI remain pending. See files.md
+and ADR-0008 for retention bounds and crash behavior. No deployment.

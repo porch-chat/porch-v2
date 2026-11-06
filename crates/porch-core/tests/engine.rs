@@ -191,6 +191,7 @@ async fn postgres_client_engine() {
         .post(
             &format!("/conversations/{}/messages", dm.id),
             &SendMessage {
+                attachments: vec![],
                 nonce: "engine_peer_nonce0001".into(),
                 content: MessageContent::Markdown {
                     text: "before ack".into(),
@@ -231,6 +232,7 @@ async fn postgres_client_engine() {
             .post(
                 &format!("/conversations/{}/messages", dm.id),
                 &SendMessage {
+                    attachments: vec![],
                     nonce: format!("pagination_nonce_{n:06}"),
                     content: MessageContent::Markdown {
                         text: format!("page {n}"),
