@@ -8,3 +8,8 @@ incremental = false
 [profile.test]
 debug = 0
 incremental = false
+
+# LiveKit's prebuilt Windows WebRTC uses the static release CRT. Keep Rust and
+# its C++ bridge on the same CRT rather than suppressing linker conflicts.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
