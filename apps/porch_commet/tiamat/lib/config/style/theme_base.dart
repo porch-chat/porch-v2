@@ -5,13 +5,13 @@ import 'package:tiamat/config/style/theme_extensions.dart';
 class ThemeBase {
   static ThemeData theme(ColorScheme scheme) => ThemeData(
         brightness: scheme.brightness,
-        fontFamily: "RobotoCustom",
+        fontFamily: "Manrope",
         fontFamilyFallback: ThemeCommon.fontFamilyFallback(),
         useMaterial3: true,
         textTheme: TextTheme(
             headlineLarge: TextStyle(
               fontWeight: FontWeight.w800,
-              fontFamily: "NunitoSans",
+              fontFamily: "Manrope",
               fontSize: 48,
               fontVariations: [
                 FontVariation.weight(900),
@@ -19,7 +19,7 @@ class ThemeBase {
             ),
             headlineMedium: TextStyle(
               fontWeight: FontWeight.w800,
-              fontFamily: "NunitoSans",
+              fontFamily: "Manrope",
               fontSize: 38,
               fontVariations: [
                 FontVariation.weight(900),
@@ -27,21 +27,21 @@ class ThemeBase {
             ),
             headlineSmall: TextStyle(
               fontWeight: FontWeight.w800,
-              fontFamily: "NunitoSans",
+              fontFamily: "Manrope",
               fontSize: 28,
               fontVariations: [
                 FontVariation.weight(900),
               ],
             ),
             titleMedium: TextStyle(
-              fontFamily: "NunitoSans",
+              fontFamily: "Manrope",
               fontSize: 20,
               fontVariations: [
                 FontVariation.weight(700),
               ],
             ),
             titleSmall: TextStyle(
-              fontFamily: "NunitoSans",
+              fontFamily: "Manrope",
               fontSize: 16,
               fontVariations: [
                 FontVariation.weight(700),

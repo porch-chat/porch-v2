@@ -238,6 +238,10 @@ flutter:
       fonts: 
         - asset: assets/font/emoji-font/TwemojiCOLR.otf
 
+    - family: Manrope
+      fonts:
+        - asset: assets/font/manrope/Manrope.ttf
+
     - family: RobotoCustom
       fonts: 
         - asset: assets/font/roboto/Roboto-Regular.ttf

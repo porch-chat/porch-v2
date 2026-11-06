@@ -93,7 +93,7 @@ try:
         if "--screenshots" in sys.argv:
             display = ":" + str(100 + free_port() % 1000)
             env.update(DISPLAY=display, XDG_DATA_HOME=temp + "/app-data")
-            xvfb = subprocess.Popen(["Xvfb", display, "-screen", "0", "1924x1200x24"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            xvfb = subprocess.Popen(["Xvfb", display, "-screen", "0", "1920x1080x24"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             processes.append(xvfb)
             time.sleep(1)
             wm = subprocess.Popen(["openbox"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
