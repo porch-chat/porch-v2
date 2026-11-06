@@ -203,7 +203,11 @@ impl Porch {
         }
         let origin = self.origin.read(cx).value().trim().to_string();
         self.settings.origin = origin.clone();
-        let _ = self.settings.save(&self.root);
+        if self.settings.save(&self.root).is_err() {
+            self.error = Some("Use a clean HTTPS server origin, or loopback HTTP, without URL credentials or query parameters. Check local settings permissions.".into());
+            cx.notify();
+            return;
+        }
         let command = Command::Login {
             origin,
             username: self.username.read(cx).value().to_string(),
