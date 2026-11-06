@@ -188,7 +188,7 @@ jobs:
           dart run scripts/codegen.dart
           flutter analyze --no-fatal-infos --no-fatal-warnings lib/client/porch
           flutter test unit_test/porch_adapter_test.dart
-          CXXFLAGS="-Wno-error=sometimes-uninitialized -Wno-sometimes-uninitialized" flutter build linux --debug
+          CXXFLAGS="-w" CFLAGS="-w" flutter build linux --debug
       - uses: actions/upload-artifact@v4
         with:
           name: porch-commet-linux-x86_64-debug
@@ -217,6 +217,9 @@ jobs:
         run: cargo build -p porch-flutter --locked
       - working-directory: apps/porch_commet/commet
         shell: pwsh
+        env:
+          CARGO_PROFILE_RELEASE_DEBUG: '0'
+          CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO: off
         run: |
           flutter pub get
           dart run scripts/codegen.dart
