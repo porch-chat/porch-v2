@@ -189,3 +189,6 @@ pub enum GatewayServer {
 
 pub mod community;
 pub use community::*;
+
+pub mod messaging;
+pub use messaging::*;
