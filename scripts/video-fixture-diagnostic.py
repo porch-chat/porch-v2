@@ -22,8 +22,8 @@ args = [
     "-c:v", "png", "-threads", "1", "-f", "image2pipe", "pipe:1",
 ]
 env = {key: "1" for key in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS")}
-with fixture.open("rb") as source, tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
-    result = subprocess.run(args, stdin=source, stdout=out, stderr=err, env=env, timeout=5)
+with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
+    result = subprocess.run(args, input=fixture.read_bytes(), stdout=out, stderr=err, env=env, timeout=5)
     size = out.tell()
     out.seek(0)
     signature = out.read(8)
