@@ -39,9 +39,13 @@ Use maintained tempfile (1472 GitHub stars) and infer (414), checked 2026-11-06;
 signature detection only, no arbitrary decode. chub lacks Rust entries, so exact
 docs.rs and downloaded source are API references. SHA-256 is existing sha2.
 
-Later Phase 7 work still required: CLI and adversarial HTTP proofs, shared-core
-resume, bounded generated thumbnails, native picker/progress/image/video previews,
-guarded HTTPS link embeds, headless UI and hosted Linux/Windows acceptance.
-Embeds must pin vetted public DNS, disable redirects/proxies/compression, and
-bound total time/body/concurrency. Never fetch an untrusted URL in the native
-renderer. No infrastructure/deployment/PC access is authorized.
+Implementation now includes CLI/adversarial HTTP proofs, durable shared-core
+resume, bounded raster thumbnails, native file actions and guarded opt-in HTTPS
+metadata. Optional Linux video posters use maintained FFmpeg via stdin/stdout,
+prlimit and strict protocols/codecs/formats. These are defense-in-depth limits,
+not a decoder exploit sandbox; disabled by default, require operator isolation
+before use with untrusted users. See files.md for exact limits and configuration.
+Static posters are previews, not video playback. No deployment or PC access.
+
+Final headless native media evidence and hosted Linux/Windows CI are outstanding
+Phase 7 gates; real platform dialogs/hardware/DPI/IME acceptance remains Dylan's.

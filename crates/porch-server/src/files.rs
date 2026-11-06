@@ -42,6 +42,7 @@ pub struct FileService {
     identity: IdentityState,
     storage: Arc<dyn Storage>,
     work: Arc<Semaphore>,
+    video: Option<crate::previews::VideoPreviewer>,
 }
 impl FileService {
     pub fn new(pool: PgPool, identity: IdentityState, storage: Arc<dyn Storage>) -> Self {
@@ -50,7 +51,12 @@ impl FileService {
             identity,
             storage,
             work: Arc::new(Semaphore::new(8)),
+            video: None,
         }
+    }
+    pub fn with_video_previews(mut self, video: crate::previews::VideoPreviewer) -> Self {
+        self.video = Some(video);
+        self
     }
     pub fn routes(self) -> Router {
         Router::new()
@@ -368,7 +374,7 @@ async fn preview(
     }
     let mut tx = s.pool.begin().await?;
     let row = sqlx::query(
-        "SELECT conversation_id,message_id,bytes FROM uploads WHERE id=$1 AND state='attached'",
+        "SELECT conversation_id,message_id,bytes,mime FROM uploads WHERE id=$1 AND state='attached'",
     )
     .bind(&id)
     .fetch_optional(&mut *tx)
@@ -390,12 +396,21 @@ async fn preview(
         return Err(missing());
     }
     let bytes = row.get::<i64, _>("bytes") as u64;
-    if bytes > crate::previews::MAX_PREVIEW_SOURCE {
-        return Err(invalid());
-    }
-    let png = s
-        .disk(move |store| crate::previews::thumbnail(store.open(&id)?))
-        .await?;
+    let mime: String = row.get("mime");
+    let png = if matches!(mime.as_str(), "video/mp4" | "video/webm") {
+        if bytes > crate::previews::MAX_VIDEO_SOURCE {
+            return Err(invalid());
+        }
+        let decoder = s.video.as_ref().ok_or_else(invalid)?;
+        let file = s.disk(move |store| store.open(&id)).await?;
+        decoder.poster(file).await.map_err(|_| invalid())?
+    } else {
+        if bytes > crate::previews::MAX_PREVIEW_SOURCE {
+            return Err(invalid());
+        }
+        s.disk(move |store| crate::previews::thumbnail(store.open(&id)?))
+            .await?
+    };
     tx.commit().await?;
     Ok((
         [
@@ -418,7 +433,7 @@ async fn download(
     }
     let mut tx = s.pool.begin().await?;
     let row = sqlx::query(
-        "SELECT conversation_id,message_id,bytes FROM uploads WHERE id=$1 AND state='attached'",
+        "SELECT conversation_id,message_id,bytes,mime FROM uploads WHERE id=$1 AND state='attached'",
     )
     .bind(&id)
     .fetch_optional(&mut *tx)

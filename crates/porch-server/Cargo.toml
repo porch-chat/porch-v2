@@ -6,7 +6,7 @@ publish.workspace = true
 
 [dependencies]
 axum.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["process"] }
 porch-protocol.workspace = true
 sqlx.workspace = true
 tracing.workspace = true

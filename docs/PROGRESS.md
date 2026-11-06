@@ -143,3 +143,12 @@ Disposable Postgres + actual HTTP desktop worker test passes stage(no upload),
 resume/finalize/send, thumbnail, exact save, cancel and logout purge. This is not
 interactive platform-dialog or Windows runtime acceptance. Video preview remains
 unfinished; Phase 7 is not complete.
+
+
+Phase 7 optional video posters implemented locally. Generated fixture passes the
+real FFmpeg/HTTP/Postgres path; default-disabled, missing-auth/wrong-scope/deleted
+denials and malformed/oversized/concurrency guards pass. Linux opt-in only,
+resource-bounded pipe decoding with explicit caveats: not an OS sandbox, needs
+operator isolation before untrusted use, no actual deployment. Static first-frame
+previews, not playback. Final headless media proof and hosted CI still pending;
+Phase 7 is not yet complete.

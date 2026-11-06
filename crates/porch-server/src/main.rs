@@ -56,7 +56,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .merge(gateway.routes())
         .merge(communities.routes())
         .merge(messaging.routes());
-    if let Some(files) = files {
+    if let Some(mut files) = files {
+        if let Some(binary) = std::env::var_os("PORCH_FFMPEG_BIN") {
+            let limiter = std::env::var_os("PORCH_PRLIMIT_BIN")
+                .ok_or("PORCH_PRLIMIT_BIN required for video previews")?;
+            files = files.with_video_previews(porch_server::previews::VideoPreviewer::new(
+                binary.into(),
+                limiter.into(),
+            )?);
+        }
         app = app.merge(files.routes());
     }
     // Outbound preview traffic is disabled unless the operator explicitly opts in.

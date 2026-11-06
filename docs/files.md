@@ -50,11 +50,11 @@ ownership/cross-conversation binding, removal, deletion, ranges and mismatch.
 The separate ignored storage test streams exactly 1 GiB without a GiB buffer.
 It proves storage mechanics, not a 1 GiB full HTTP/UI round trip.
 
-Still required before Phase 7 completion: CLI/shared-core transfer client with
-durable resume, bounded generated image thumbnails, actual native file UI and
-image/video previews, guarded server-side link embeds, end-to-end client tests,
-headless native UI proof, and final Linux/Windows hosted CI. Native runtime,
-DPI/IME/hardware acceptance remains Dylan's. No deployment has occurred.
+Phase 7 local implementation now includes backend/CLI/shared-core transfers,
+raster thumbnails, optional video posters, guarded server-side embeds and native
+attachment actions. Final headless media evidence and hosted Linux/Windows CI
+remain completion gates. Native runtime/DPI/IME/hardware acceptance remains
+Dylan's, separate from automated checks. No deployment has occurred.
 
 CLI transfer proof uses file-create CONVERSATION PATH, file-status ID,
 file-resume ID PATH, file-upload CONVERSATION PATH, file-complete ID,
@@ -66,8 +66,8 @@ position and verifies local size/hash. It never assumes a timed-out request
 failed and never appends blindly. Download refuses existing paths, creates
 private files on Unix and removes partial files on errors. CLI downloads check
 length but not a separately provided digest; the HTTP integration compares exact
-bytes. Shared-core durable transfer state and authenticated ranged download
-resume are still pending, not implied by these terminal commands.
+bytes. Shared-core durable upload state is described below; authenticated ranged
+download resume is not implemented.
 
 Shared core now persists upload ID, source path and last acknowledged status in
 account-bound SQLite, with conversation foreign-key cascade. Sign-out purges
@@ -82,20 +82,10 @@ Only sanitized transport errors escape; local paths are never sent to the server
 Concurrent calls may return conflict/stale-ack errors; no automatic append retry
 or cross-process local upload scheduling is claimed. queue_attachments supports
 attachment-only durable sends. Ready transfer metadata stays until explicit
-cancel (for unsent objects) or conversation/account purge; a native cleanup UX
-and durable ranged downloads are still pending.
+cancel (for unsent objects) or conversation/account purge. Durable ranged
+downloads are not implemented.
 
-Image previews are now available at authenticated GET /attachments/{id}/preview.
-Only attached, live, readable messages qualify, with identical scope checks to
-original downloads. PNG/JPEG/WebP inputs up to 16 MiB and strict 4096x4096 pixel
-bounds are decoded in bounded blocking work and re-encoded as metadata-free PNG
-at most 480x320. SVG/HTML and other codecs are never rendered. Decoder allocation
-limit 96 MiB is best effort, not an OS memory/CPU sandbox or hard time limit.
-There is no persistent preview cache yet; requesting again repeats bounded work.
-Actual HTTP tests cover authorized raster output, wrong scope, unsent objects
-and deletion denial. Video previews and native display remain pending.
-
-## Generated previews and explicit link metadata (phase still incomplete)
+## Generated previews and explicit link metadata
 
 GET /attachments/{id}/preview reauthorizes the same live-message scope as a
 download, then decodes only PNG/JPEG/WebP under a 16 MiB compressed-input cap,
@@ -148,3 +138,33 @@ previews. Link details are an explicit opt-in per Markdown link, rendered as
 plain text with no remote images. The picker/save dialogs use GPUI platform APIs,
 not custom filesystem browsing. Linux/Windows interactive dialog, DPI, IME and
 assistive-technology acceptance still requires real user testing.
+
+Optional video posters
+----------------------
+
+Linux servers can opt in with absolute PORCH_FFMPEG_BIN and PORCH_PRLIMIT_BIN
+paths to maintained FFmpeg and util-linux prlimit executables. Disabled by
+default; missing/relative/non-Linux configurations fail startup. Decoding remains
+opt-in per native Load preview click. The server pipes only a private object's
+bytes, never its name or a URL, into the child. Only MP4/WebM containers and
+H.264/HEVC/VP8/VP9/AV1 decoders are allowed; only the pipe protocol is enabled.
+No nested files/network/playlists, audio/subtitles, inherited environment,
+stderr body or original video is exposed to the native renderer.
+
+Video originals up to 64 MiB and 8,388,608 pixels may yield one static 480x320
+PNG poster. This is not inline playback or an animated thumbnail. Pipe-based
+MP4 decoding may fail for non-streamable files; any unsupported/invalid video
+remains downloadable, never auto-opened. Two concurrent decoder processes,
+five-second wall timeout, four CPU seconds, 512 MiB virtual-address-space and
+32-file-descriptor limits apply. FFmpeg allocations are individually capped at
+32 MiB and output at 2 MiB before a second raster validation/re-encoding pass.
+Cancellation kills the child; process drop also has kill-on-drop enabled.
+
+These limits/protocol allowlists are NOT an OS sandbox against decoder exploits.
+Before enabling for untrusted users, run the service/decoder with a low-privilege
+identity in a separately restricted container or OS sandbox with no egress or
+access to secrets, keep FFmpeg patched, and budget storage/CPU separately.
+No such deployment or isolation configuration has been performed in this phase.
+All generated media is fixture-only; tests exercise real FFmpeg poster output,
+default-disabled behavior, auth/scope/deletion denial, excessive size/concurrency,
+and malformed HTML, playlist, local-file-reference and truncated container input.

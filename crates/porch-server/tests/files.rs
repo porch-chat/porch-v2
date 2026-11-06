@@ -163,6 +163,8 @@ async fn postgres_files_lifecycle() {
         local: LocalStorage::new(&temp.path().join("private")).unwrap(),
         fail: AtomicBool::new(false),
     });
+    #[cfg(target_os = "linux")]
+    let state_for_video = state.clone();
     let app = MessagingService::new(pool.clone(), state.clone(), Arc::new(Bus))
         .routes()
         .merge(FileService::new(pool.clone(), state.clone(), disk.clone()).routes())
@@ -347,6 +349,93 @@ async fn postgres_files_lifecycle() {
         raw(&app, "GET", &image_path, &peer, vec![], None).await.0,
         404
     );
+    // Generated solid-color fixture, not third-party media. Disabled by default;
+    // enabled Linux decoder uses pipes and strict process/resource bounds.
+    let movie = include_bytes!("fixtures/poster.mp4");
+    let created = ok(
+        &app,
+        "POST",
+        "/uploads",
+        &owner,
+        request(conversation, movie),
+    )
+    .await;
+    let video_id = created["id"].as_str().unwrap();
+    assert_eq!(
+        raw(
+            &app,
+            "POST",
+            &format!("/uploads/{video_id}/chunks?offset=0"),
+            &owner,
+            movie.to_vec(),
+            None
+        )
+        .await
+        .0,
+        200
+    );
+    ok(
+        &app,
+        "POST",
+        &format!("/uploads/{video_id}/complete"),
+        &owner,
+        Value::Null,
+    )
+    .await;
+    let video_message = ok(
+        &app,
+        "POST",
+        &messages,
+        &owner,
+        send(video_id, "files_video_00001"),
+    )
+    .await;
+    assert_eq!(video_message["attachments"][0]["mime"], "video/mp4");
+    let video_path = format!("/attachments/{video_id}/preview");
+    assert_eq!(
+        raw(&app, "GET", &video_path, &peer, vec![], None).await.0,
+        400
+    );
+    #[cfg(target_os = "linux")]
+    {
+        let decoder = porch_server::previews::VideoPreviewer::new(
+            "/usr/bin/ffmpeg".into(),
+            "/usr/bin/prlimit".into(),
+        )
+        .unwrap();
+        let enabled = FileService::new(pool.clone(), state_for_video.clone(), disk.clone())
+            .with_video_previews(decoder)
+            .routes();
+        assert_eq!(
+            raw(&enabled, "GET", &video_path, "", vec![], None).await.0,
+            401
+        );
+        assert_eq!(
+            raw(&enabled, "GET", &video_path, &stranger, vec![], None)
+                .await
+                .0,
+            404
+        );
+        let (code, headers, bytes) = raw(&enabled, "GET", &video_path, &peer, vec![], None).await;
+        assert_eq!(code, 200);
+        assert_eq!(headers["content-type"], "image/png");
+        let poster = image::load_from_memory(&bytes).unwrap();
+        assert_eq!((poster.width(), poster.height()), (480, 270));
+        ok(
+            &app,
+            "POST",
+            &format!("{messages}/{}", video_message["id"].as_i64().unwrap()),
+            &owner,
+            json!({"op":"delete"}),
+        )
+        .await;
+        assert_eq!(
+            raw(&enabled, "GET", &video_path, &peer, vec![], None)
+                .await
+                .0,
+            404
+        );
+    }
     let data = b"<html><script>untrusted never inline</script></html>";
     assert_eq!(
         call(&app, "POST", "/uploads", "", request(conversation, data))
