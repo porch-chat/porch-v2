@@ -14,10 +14,10 @@ tokio-tungstenite.workspace = true
 sqlx = { workspace = true, features = ["sqlite"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
 rand = "0.8"
+sha2 = "0.10"
 
 [dev-dependencies]
 proptest = "1.12"
 tempfile = "3"
 porch-server = { path = "../porch-server" }
 axum.workspace = true
-sha2 = "0.10"

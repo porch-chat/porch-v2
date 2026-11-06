@@ -7,7 +7,7 @@ use std::time::Duration;
 
 #[derive(Clone)]
 pub struct Api {
-    client: Client,
+    pub(crate) client: Client,
     origin: String,
     token: String,
 }
@@ -57,7 +57,7 @@ impl Api {
     pub async fn post_empty<B: Serialize>(&self, path: &str, body: &B) -> Result<()> {
         self.bytes(Method::POST, path, Some(body)).await.map(|_| ())
     }
-    async fn bytes<B: Serialize>(
+    pub(crate) async fn bytes<B: Serialize>(
         &self,
         method: Method,
         path: &str,

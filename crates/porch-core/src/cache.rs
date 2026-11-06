@@ -77,7 +77,8 @@ impl Cache {
         CREATE TABLE IF NOT EXISTS messages(id INTEGER PRIMARY KEY,conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,revision INTEGER NOT NULL,data TEXT NOT NULL);
         CREATE INDEX IF NOT EXISTS messages_conversation ON messages(conversation_id,id);
         CREATE TABLE IF NOT EXISTS outbox(id INTEGER PRIMARY KEY AUTOINCREMENT,conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,nonce TEXT NOT NULL UNIQUE,data TEXT NOT NULL,state TEXT NOT NULL CHECK(state IN ('queued','failed')),failure TEXT);
-        CREATE TABLE IF NOT EXISTS communities(id INTEGER PRIMARY KEY,data TEXT NOT NULL);").execute(&pool).await?;
+        CREATE TABLE IF NOT EXISTS communities(id INTEGER PRIMARY KEY,data TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS transfers(id TEXT PRIMARY KEY,conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,data TEXT NOT NULL);").execute(&pool).await?;
         let mut tx = pool.begin().await?;
         sqlx::query("INSERT OR IGNORE INTO binding(id,origin,user_id,version) VALUES(1,?,?,1)")
             .bind(origin)

@@ -81,7 +81,7 @@ impl Engine {
             .fetch_add(discarded, Ordering::SeqCst);
         self.inner.cache.clear().await
     }
-    fn active(&self) -> Result<()> {
+    pub(crate) fn active(&self) -> Result<()> {
         if self.is_signed_out() {
             Err(Error::SignedOut {
                 discarded_sends: self.discarded_sends(),
@@ -210,9 +210,25 @@ impl Engine {
         mentions: Vec<i64>,
         mention_everyone: bool,
     ) -> Result<SendMessage> {
+        self.queue_attachments(id, content, reply_to, mentions, mention_everyone, vec![])
+            .await
+    }
+    #[allow(clippy::too_many_arguments)] // Same composer fields plus explicit attachment IDs.
+    pub async fn queue_attachments(
+        &self,
+        id: i64,
+        content: MessageContent,
+        reply_to: Option<i64>,
+        mentions: Vec<i64>,
+        mention_everyone: bool,
+        attachments: Vec<String>,
+    ) -> Result<SendMessage> {
         let _lock = self.inner.gate.lock().await;
         self.active()?;
-        if !matches!(&content,MessageContent::Markdown{text} if !text.trim().is_empty()&&text.chars().count()<=8000&&text.len()<=24000&&!text.contains('\0'))
+        if attachments.len() > 10 || attachments.iter().any(|id| !crate::transfers::valid_id(id)) {
+            return Err(Error::InvalidData);
+        }
+        if !matches!(&content,MessageContent::Markdown{text} if (!text.trim().is_empty()||!attachments.is_empty())&&text.chars().count()<=8000&&text.len()<=24000&&!text.contains('\0'))
             || mentions.len() > 20
         {
             return Err(Error::InvalidData);
@@ -221,7 +237,7 @@ impl Engine {
         OsRng.fill_bytes(&mut bytes);
         let nonce = bytes.iter().map(|b| format!("{b:02x}")).collect();
         let request = SendMessage {
-            attachments: vec![],
+            attachments,
             nonce,
             content,
             reply_to,

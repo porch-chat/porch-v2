@@ -2,11 +2,13 @@
 mod cache;
 mod engine;
 mod gateway;
+mod transfers;
 mod transport;
 pub use cache::{Cache, PendingSend, RemovalNotice, RemovedLocalSend, SendState};
 pub use engine::Engine;
 pub use gateway::{ConnectionState, GatewayTask};
 use porch_protocol::ErrorCode;
+pub use transfers::PendingUpload;
 pub use transport::Api;
 
 pub fn protocol_version() -> u16 {

@@ -68,3 +68,19 @@ private files on Unix and removes partial files on errors. CLI downloads check
 length but not a separately provided digest; the HTTP integration compares exact
 bytes. Shared-core durable transfer state and authenticated ranged download
 resume are still pending, not implied by these terminal commands.
+
+Shared core now persists upload ID, source path and last acknowledged status in
+account-bound SQLite, with conversation foreign-key cascade. Sign-out purges
+that metadata. begin_upload requires synchronized conversation visibility;
+advance_upload re-queries the authoritative offset and sends at most one chunk
+per call, or finalizes after all bytes. A failed acknowledgement does not advance
+the local marker. A fresh engine resumes from the server, not that stale marker.
+Every advance rehashes the source before reading the chunk; this conservative
+v1 choice detects edits but costs O(file size) disk reads per chunk. Source
+mutation after that check still fails the server's final whole-file digest.
+Only sanitized transport errors escape; local paths are never sent to the server.
+Concurrent calls may return conflict/stale-ack errors; no automatic append retry
+or cross-process local upload scheduling is claimed. queue_attachments supports
+attachment-only durable sends. Ready transfer metadata stays until explicit
+cancel (for unsent objects) or conversation/account purge; a native cleanup UX
+and durable ranged downloads are still pending.
