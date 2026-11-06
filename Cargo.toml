@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/porch-protocol", "crates/porch-server", "crates/porch-core", "crates/porch-cli", "crates/porch-desktop"]
+members = ["crates/porch-protocol", "crates/porch-server", "crates/porch-core", "crates/porch-cli", "crates/porch-desktop", "crates/porch-flutter"]
 
 [workspace.package]
 version = "0.1.0"

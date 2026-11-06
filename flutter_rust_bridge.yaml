@@ -1,0 +1,7 @@
+rust_input: crate::api
+rust_root: crates/porch-flutter
+dart_output: apps/porch_flutter/lib/src/rust
+rust_output: crates/porch-flutter/src/frb_generated.rs
+dart_root: apps/porch_flutter
+web: false
+type_64bit_int: true
