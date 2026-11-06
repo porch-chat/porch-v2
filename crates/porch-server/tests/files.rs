@@ -7,6 +7,7 @@ use axum::{
 use porch_protocol::*;
 use porch_server::{
     MIGRATOR,
+    embeds::EmbedService,
     files::FileService,
     gateway::EventBus,
     identity::{self, IdentityState},
@@ -165,6 +166,7 @@ async fn postgres_files_lifecycle() {
     let app = MessagingService::new(pool.clone(), state.clone(), Arc::new(Bus))
         .routes()
         .merge(FileService::new(pool.clone(), state.clone(), disk.clone()).routes())
+        .merge(EmbedService::new(pool.clone(), state.clone()).routes())
         .merge(identity::routes(state));
     let conversation = ok(
         &app,
@@ -187,6 +189,92 @@ async fn postgres_files_lifecycle() {
         .as_i64()
         .unwrap();
     let messages = format!("/conversations/{conversation}/messages");
+    // Embeds must be an explicit link in a live readable message before any
+    // outbound connection is considered. Private DNS/IP answers remain forbidden.
+    let message=ok(&app,"POST",&messages,&owner,json!({"nonce":"embed-policy-test",
+        "content":{"format":"markdown","text":"[private](https://127.0.0.1/) [safe](https://example.com/)"}})).await;
+    let mid = message["id"].as_i64().unwrap();
+    let embed = format!("{messages}/{mid}/embed");
+    assert_eq!(
+        call(
+            &app,
+            "POST",
+            &embed,
+            &stranger,
+            json!({"url":"https://example.com/"})
+        )
+        .await
+        .0,
+        404
+    );
+    assert_eq!(
+        call(
+            &app,
+            "POST",
+            &embed,
+            "",
+            json!({"url":"https://example.com/"})
+        )
+        .await
+        .0,
+        401
+    );
+    assert_eq!(
+        call(
+            &app,
+            "POST",
+            &embed,
+            &owner,
+            json!({"url":"https://unlinked.example/"})
+        )
+        .await
+        .0,
+        400
+    );
+    assert_eq!(
+        call(
+            &app,
+            "POST",
+            &embed,
+            &peer,
+            json!({"url":"https://127.0.0.1/"})
+        )
+        .await
+        .0,
+        400
+    );
+    assert_eq!(
+        call(
+            &app,
+            "POST",
+            &embed,
+            &owner,
+            json!({"url":"http://example.com/"})
+        )
+        .await
+        .0,
+        400
+    );
+    ok(
+        &app,
+        "POST",
+        &format!("{messages}/{mid}"),
+        &owner,
+        json!({"op":"delete"}),
+    )
+    .await;
+    assert_eq!(
+        call(
+            &app,
+            "POST",
+            &embed,
+            &peer,
+            json!({"url":"https://example.com/"})
+        )
+        .await
+        .0,
+        404
+    );
     // Safe server re-encoding uses the same live scope as original downloads.
     let mut png = std::io::Cursor::new(Vec::new());
     image::DynamicImage::new_rgba8(800, 400)

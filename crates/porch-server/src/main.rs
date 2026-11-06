@@ -59,6 +59,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     if let Some(files) = files {
         app = app.merge(files.routes());
     }
+    // Outbound preview traffic is disabled unless the operator explicitly opts in.
+    if std::env::var("PORCH_EMBEDS").as_deref() == Ok("1") {
+        app = app
+            .merge(porch_server::embeds::EmbedService::new(pool.clone(), state.clone()).routes());
+    }
     let listener = tokio::net::TcpListener::bind(config.bind).await?;
     tracing::info!(address = %listener.local_addr()?, "Porch listening");
     axum::serve(listener, app)

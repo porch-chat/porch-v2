@@ -126,3 +126,11 @@ send, byte-exact download and overwrite refusal. This is backend/CLI evidence,
 not the full phase. Shared-core durable transfers, image/video previews,
 guarded server-side embeds and native attachment UI remain pending. See files.md
 and ADR-0008 for retention bounds and crash behavior. No deployment.
+
+Phase 7 follow-ups (still incomplete): 71fba23 implements authenticated bounded
+raster thumbnails; 7586e6f fixes a hosted Windows unused-mut failure in storage
+creation, found in eeeb960 run 42186179903 (Linux passed, Windows did not).
+Guarded opt-in link metadata now has policy/response limits and actual
+Postgres/HTTP authorization tests. CLI message-embed CONVERSATION MESSAGE uses
+PORCH_LINK, with no arbitrary unauthenticated URL fetching. Remote network success,
+native attachment UI and video previews remain separate unfinished work.

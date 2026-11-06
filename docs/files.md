@@ -94,3 +94,31 @@ limit 96 MiB is best effort, not an OS memory/CPU sandbox or hard time limit.
 There is no persistent preview cache yet; requesting again repeats bounded work.
 Actual HTTP tests cover authorized raster output, wrong scope, unsent objects
 and deletion denial. Video previews and native display remain pending.
+
+## Generated previews and explicit link metadata (phase still incomplete)
+
+GET /attachments/{id}/preview reauthorizes the same live-message scope as a
+download, then decodes only PNG/JPEG/WebP under a 16 MiB compressed-input cap,
+4096-by-4096 dimension limit and 96 MiB best-effort decode allocation limit.
+It re-encodes to a metadata-free PNG at most 480 by 320. Eight bounded blocking
+workers prevent unbounded simultaneous decodes. There is no preview cache.
+This is not a process sandbox or a hard CPU-time/memory guarantee against a
+decoder vulnerability. HTML/SVG/scripts and videos do not use the raster decoder.
+
+When explicitly enabled with PORCH_EMBEDS=1, POST
+/conversations/{conversation}/messages/{message}/embed accepts {"url":"..."}.
+The exact URL must occur as a Markdown link in a live readable message.
+It returns plain bounded title/description strings, never remote HTML or image
+URLs. HTTPS port 443 only, no credentials/fragments, all resolved addresses must
+be public IPv4 and are pinned for the request. IPv6, mapped/transition forms,
+IANA special-purpose IPv4 ranges, mixed public/private DNS, redirects, ambient
+proxies and compressed responses are denied. No cookies or authorization are
+sent. Total DNS/network deadline is five seconds, request timeout four seconds,
+HTML body at most 1 MiB. Four workers, six requests/user/minute and sixty global
+requests/minute; at most 1024 rate-map keys. Limits are per process, not cluster
+quotas. Metadata parsing stays on the bounded blocking pool; current permission,
+message liveness and session authentication are checked again after fetching.
+The IANA address policy is conservative and must be maintained when registries
+change. Outbound fetching is disabled by default, including if storage is enabled.
+No remote success integration or production network egress is claimed by the
+hermetic policy/response/authorization tests.

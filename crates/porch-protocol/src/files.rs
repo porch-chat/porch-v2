@@ -41,3 +41,17 @@ pub struct Attachment {
     /// Detected by server, not supplied by the uploader.
     pub mime: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EmbedRequest {
+    /// Must exactly match an explicit link in an existing readable message.
+    pub url: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LinkEmbed {
+    pub url: String,
+    /// Plain display strings, never HTML. No remote image URL is exposed.
+    pub title: String,
+    pub description: String,
+}

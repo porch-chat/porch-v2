@@ -115,3 +115,5 @@ pub mod storage;
 pub mod files;
 
 pub mod previews;
+
+pub mod embeds;

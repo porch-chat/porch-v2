@@ -98,7 +98,8 @@ fn run() -> Result<()> {
         return files::command(&cli, &args);
     }
     let expected = match command {
-        "invite-create" | "message-mutate" | "message-search" | "message-read" => 3,
+        "invite-create" | "message-mutate" | "message-search" | "message-read"
+        | "message-embed" => 3,
         "messages" | "message-send" | "message-delta" | "message-pins" | "dm-mutate" => 2,
         "community-invite-create" => 4,
         "community-invite-revoke" => 3,
@@ -110,6 +111,21 @@ fn run() -> Result<()> {
         return Err("incorrect number of arguments".into());
     }
     match command {
+        "message-embed" => {
+            let conversation: i64 = args[1].parse()?;
+            let message: i64 = args[2].parse()?;
+            let embed: LinkEmbed = cli
+                .request(
+                    Method::POST,
+                    &format!("/conversations/{conversation}/messages/{message}/embed"),
+                    Some(&EmbedRequest {
+                        url: env::var("PORCH_LINK")?,
+                    }),
+                    true,
+                )?
+                .json()?;
+            print_json(&embed)?;
+        }
         "communities" => cli.read::<Vec<CommunitySummary>>("/communities")?,
         "community" => {
             let id: i64 = args[1].parse()?;
