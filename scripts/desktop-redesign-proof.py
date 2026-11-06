@@ -60,7 +60,7 @@ with tempfile.TemporaryDirectory(prefix='porch-redesign-') as data:
             dm=cli('dm-create',PORCH_COMMAND=json.dumps({'participants':[ids[name]]}))
             for who,text in [(name,'Hey! Want to grab dinner this week?'),('sam','Definitely. Are you free tomorrow?'),(name,'Tomorrow works! How about 7 on Pine?'),('sam','That sounds great.')]:
                 n+=1; send(dm['id'],text,sam['token'] if who=='sam' else tok[who],n)
-        pins=['u:%d'%ids['maya'],'c:%d'%community,'u:%d'%ids['eli']]
+        pins=['c:%d'%community,'u:%d'%ids['maya'],'u:%d'%ids['eli']]  # group tab first so click positions are deterministic
         ddir=Path(data)/'cache'; ddir.mkdir()
         (ddir/'settings.json').write_text(json.dumps({'font_size':15,'members':False,'origin':env['PORCH_URL'],'pins':pins}))
         disp=f':{dnum}'
@@ -83,10 +83,12 @@ with tempfile.TemporaryDirectory(prefix='porch-redesign-') as data:
             subprocess.run(['xdotool','key','ctrl+a'],env=ui)
             subprocess.run(['xdotool','type','--clearmodifiers','--file','-'],input=value,text=True,env=ui,check=True)
         click(cx,cy+82); time.sleep(6)
-        shot('home')
-        click(int(os.environ.get('TAB_MAYA_X','190')),28); time.sleep(3); shot('dm')
-        click(int(os.environ.get('TAB_GROUP_X','330')),28); time.sleep(3)
-        click(130,110); time.sleep(3); shot('group')
+        # window sits at (2,40) on screen; coordinates below are window-relative
+        def wclick(x,y): click(x+2,y+40)
+        wclick(45,28); time.sleep(3); shot('home')
+        wclick(int(os.environ.get('TAB_GROUP_X','150')),28); time.sleep(2)
+        wclick(130,int(os.environ.get('ROOM_Y','110'))); time.sleep(3); shot('group')
+        wclick(int(os.environ.get('TAB_MAYA_X','252')),28); time.sleep(3); shot('dm')
         print('captured; inspect before claiming')
     finally:
         for p in (desktop,wm,xvfb,server):

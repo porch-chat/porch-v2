@@ -422,7 +422,7 @@ impl Porch {
                 }
             }
         }
-        out.sort_by(|a, b| a.1.to_lowercase().cmp(&b.1.to_lowercase()));
+        out.sort_by_key(|a| a.1.to_lowercase());
         out
     }
     fn topbar(&self, cx: &mut Context<Self>) -> Div {
@@ -525,14 +525,9 @@ impl Porch {
                 div()
                     .flex()
                     .items_center()
-                    .children(faces.iter().enumerate().map(|(i, (id, name))| {
-                        avatar(*id, name, 28.)
-                            .ml(px(if i == 0 { 0. } else { -8. }))
-                            .border_2()
-                            .border_color(rgb(SURFACE))
-                    })),
+                    .gap_2()
+                    .children(faces.iter().map(|(id, name)| avatar(*id, name, 28.))),
             )
-            .when(faces.len() > 0, |d| d)
             .child(
                 Button::new("settings")
                     .icon(icon("settings"))
@@ -861,7 +856,7 @@ impl Porch {
                     h.community_id.is_none() && self.head_title(h).to_lowercase().contains(q.trim())
                 })
                 .collect();
-            heads.sort_by(|a, b| b.last_message_id.cmp(&a.last_message_id));
+            heads.sort_by_key(|a| std::cmp::Reverse(a.last_message_id));
             for head in heads {
                 list = list.child(self.dm_row(head, cx));
             }
