@@ -197,3 +197,38 @@ jobs:
             apps/porch_commet/commet/LICENSE
             apps/porch_commet/NOTICE-COMMET.md
           retention-days: 7
+
+  commet-windows:
+    name: Commet fork (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Rust toolchain
+        run: rustup show active-toolchain
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: commet-bridge-win
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.8'
+          channel: stable
+          cache: true
+      - name: Build Porch native library
+        run: cargo build -p porch-flutter --locked
+      - working-directory: apps/porch_commet/commet
+        shell: pwsh
+        run: |
+          flutter pub get
+          dart run scripts/codegen.dart
+          flutter test unit_test/porch_adapter_test.dart
+          flutter build windows --release
+          if (!(Test-Path build/windows/x64/runner/Release/porch_flutter.dll)) { throw "Porch native DLL missing from bundle" }
+          if (!(Test-Path build/windows/x64/runner/Release/commet.exe)) { throw "Commet executable missing" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: porch-commet-windows-x86_64
+          path: |
+            apps/porch_commet/commet/build/windows/x64/runner/Release/
+            apps/porch_commet/commet/LICENSE
+            apps/porch_commet/NOTICE-COMMET.md
+          retention-days: 7

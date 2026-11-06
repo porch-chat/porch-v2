@@ -99,3 +99,9 @@ install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
 install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   CONFIGURATIONS Profile;Release
   COMPONENT Runtime)
+
+# Porch engine, built separately with Cargo in the repository workspace.
+get_filename_component(PORCH_WORKSPACE "${CMAKE_CURRENT_SOURCE_DIR}/../../../.." ABSOLUTE)
+set(PORCH_RUST_LIBRARY "${PORCH_WORKSPACE}/target/debug/porch_flutter.dll"
+    CACHE FILEPATH "Built porch-flutter library")
+install(FILES "${PORCH_RUST_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}" COMPONENT Runtime)
