@@ -70,7 +70,7 @@ pub(crate) fn audience(old: &Community, new: Option<&Community>) -> Vec<i64> {
     users.dedup();
     users
 }
-fn decode(value: serde_json::Value) -> Result<Community> {
+pub(crate) fn decode(value: serde_json::Value) -> Result<Community> {
     let c: Community = serde_json::from_value(value).map_err(|_| error(ErrorCode::Internal))?;
     c.validate().map_err(|_| error(ErrorCode::Internal))?;
     Ok(c)
@@ -114,6 +114,21 @@ async fn save(conn: &mut PgConnection, c: &Community) -> Result<()> {
             .bind(user)
             .execute(&mut *conn)
             .await?;
+    }
+    let ids: Vec<i64> = c
+        .channels
+        .iter()
+        .filter(|ch| ch.kind == ChannelKind::Text)
+        .map(|ch| ch.id)
+        .collect();
+    sqlx::query("DELETE FROM conversations WHERE community_id=$1 AND NOT(channel_id=ANY($2))")
+        .bind(c.summary.id)
+        .bind(&ids)
+        .execute(&mut *conn)
+        .await?;
+    for ch in c.channels.iter().filter(|ch| ch.kind == ChannelKind::Text) {
+        sqlx::query("INSERT INTO conversations(community_id,channel_id,name) VALUES($1,$2,$3) ON CONFLICT(community_id,channel_id) DO UPDATE SET name=EXCLUDED.name")
+            .bind(c.summary.id).bind(ch.id).bind(&ch.name).execute(&mut *conn).await?;
     }
     Ok(())
 }

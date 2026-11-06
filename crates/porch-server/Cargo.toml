@@ -14,6 +14,8 @@ tracing-subscriber.workspace = true
 
 serde_json.workspace = true
 serde.workspace = true
+pulldown-cmark = "0.13.6"
+ammonia = "4.2.4"
 
 [dev-dependencies]
 proptest = "1.12"

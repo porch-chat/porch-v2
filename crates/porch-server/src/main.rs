@@ -38,7 +38,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         std::sync::Arc::new(gateway.clone());
     state.set_event_bus(&bus);
     let communities =
-        porch_server::communities::CommunityService::new(pool.clone(), state.clone(), bus);
+        porch_server::communities::CommunityService::new(pool.clone(), state.clone(), bus.clone());
+    let messaging =
+        porch_server::messaging::MessagingService::new(pool.clone(), state.clone(), bus);
     let listener = tokio::net::TcpListener::bind(config.bind).await?;
     tracing::info!(address = %listener.local_addr()?, "Porch listening");
     axum::serve(
@@ -46,7 +48,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         router()
             .merge(porch_server::identity::routes(state.clone()))
             .merge(gateway.routes())
-            .merge(communities.routes()),
+            .merge(communities.routes())
+            .merge(messaging.routes()),
     )
     .with_graceful_shutdown(async {
         if let Err(error) = tokio::signal::ctrl_c().await {

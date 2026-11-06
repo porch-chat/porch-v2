@@ -107,3 +107,5 @@ mod tests {
 pub mod permissions;
 
 pub mod communities;
+
+pub mod messaging;
