@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 360" role="img" aria-labelledby="title desc">
+  <title id="title">Porch.chat threshold logo</title>
+  <desc id="desc">Porch.chat logo with a porch threshold chat mark and the tagline Pull up. Talk awhile.</desc>
+  <defs>
+    <linearGradient id="bg" x1="58" y1="48" x2="302" y2="312" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#34D399"/>
+      <stop offset=".52" stop-color="#14B8A6"/>
+      <stop offset="1" stop-color="#2563EB"/>
+    </linearGradient>
+  </defs>
+  <rect x="42" y="42" width="276" height="276" rx="66" fill="url(#bg)"/>
+  <path d="M108 248V147l72-53 72 53v101" fill="none" stroke="#FFFFFF" stroke-width="25" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M132 202h96c21 0 38 15 38 34s-17 34-38 34h-40l-34 27c-8 7-20 1-20-10v-16h-2c-21 0-38-15-38-34s17-35 38-35Z" fill="#FFFFFF"/>
+  <circle cx="157" cy="237" r="11" fill="#0F766E"/>
+  <circle cx="181" cy="237" r="11" fill="#2563EB"/>
+  <circle cx="205" cy="237" r="11" fill="#7C3AED"/>
+  <text x="374" y="176" fill="#111827" font-family="Inter, Avenir Next, Segoe UI, Arial, sans-serif" font-size="104" font-weight="850" letter-spacing="-1">
+    Porch<tspan fill="#2563EB">.chat</tspan>
+  </text>
+  <text x="380" y="241" fill="#475569" font-family="Inter, Avenir Next, Segoe UI, Arial, sans-serif" font-size="38" font-weight="650">
+    Pull up. Talk awhile.
+  </text>
+  <path d="M382 273h260" stroke="#F97316" stroke-width="9" stroke-linecap="round"/>
+  <circle cx="681" cy="273" r="12" fill="#14B8A6"/>
+  <circle cx="727" cy="273" r="12" fill="#2563EB"/>
+</svg>

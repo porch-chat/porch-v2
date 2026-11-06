@@ -1,0 +1,18 @@
+{
+  "dark": {
+    "text / background": 15.54,
+    "textMuted / surface": 8.28,
+    "onAccent / accent": 9.54,
+    "link / surface": 10.41,
+    "danger / surface": 8.5,
+    "success / surface": 10.41
+  },
+  "light": {
+    "text / background": 13.7,
+    "textMuted / surface": 6.26,
+    "onAccent / accent": 6.94,
+    "link / surface": 6.95,
+    "danger / surface": 6.33,
+    "success / surface": 6.95
+  }
+}

@@ -1,0 +1,31 @@
+[data-theme="dark"] {
+  --porch-background: #111210;
+  --porch-surface: #191D19;
+  --porch-surface-raised: #232B24;
+  --porch-text: #F4E8D7;
+  --porch-text-muted: #B8B5A6;
+  --porch-border: #596458;
+  --porch-accent: #F3B85A;
+  --porch-accent-hover: #FFCD7D;
+  --porch-on-accent: #241B0F;
+  --porch-link: #8ED9BE;
+  --porch-focus: #F3B85A;
+  --porch-danger: #FF9D8D;
+  --porch-success: #8ED9BE;
+}
+
+[data-theme="light"] {
+  --porch-background: #FAF5EB;
+  --porch-surface: #FFFCF6;
+  --porch-surface-raised: #EDE7DB;
+  --porch-text: #182B25;
+  --porch-text-muted: #566256;
+  --porch-border: #818C7D;
+  --porch-accent: #8C4418;
+  --porch-accent-hover: #6F3212;
+  --porch-on-accent: #FFFCF6;
+  --porch-link: #226349;
+  --porch-focus: #8C4418;
+  --porch-danger: #AC3228;
+  --porch-success: #226349;
+}

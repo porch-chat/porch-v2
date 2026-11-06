@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Porch.chat threshold icon</title>
+  <desc id="desc">A porch threshold shaped like a speech bubble.</desc>
+  <defs>
+    <linearGradient id="bg" x1="13" y1="13" x2="116" y2="117" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#34D399"/>
+      <stop offset=".52" stop-color="#14B8A6"/>
+      <stop offset="1" stop-color="#2563EB"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="30" fill="url(#bg)"/>
+  <path d="M31 97V51l33-24 33 24v46" fill="none" stroke="#FFFFFF" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M42 76h44c9 0 16 6 16 14s-7 14-16 14H68l-15 12c-4 3-9 0-9-5v-7h-2c-9 0-16-6-16-14s7-14 16-14Z" fill="#FFFFFF"/>
+  <circle cx="53" cy="90" r="5" fill="#0F766E"/>
+  <circle cx="64" cy="90" r="5" fill="#2563EB"/>
+  <circle cx="75" cy="90" r="5" fill="#7C3AED"/>
+</svg>
