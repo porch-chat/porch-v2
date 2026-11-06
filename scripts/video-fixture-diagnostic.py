@@ -6,12 +6,13 @@ arguments synchronized with previews.rs; the real HTTP/native tests remain gates
 from pathlib import Path
 import subprocess
 import tempfile
+import resource
 
 root = Path(__file__).resolve().parents[1]
 fixture = root / "crates/porch-server/tests/fixtures/poster.mp4"
 args = [
     "/usr/bin/prlimit", "--as=536870912", "--cpu=4", "--nofile=32",
-    "--fsize=1048576", "--", "/usr/bin/ffmpeg",
+    "--stack=8388608", "--fsize=1048576", "--", "/usr/bin/ffmpeg",
     "-hide_banner", "-loglevel", "error", "-nostdin", "-max_alloc", "33554432",
     "-threads", "1", "-filter_threads", "1", "-protocol_whitelist", "pipe",
     "-format_whitelist", "mov,matroska,webm",
@@ -22,6 +23,8 @@ args = [
     "-c:v", "png", "-threads", "1", "-f", "image2pipe", "pipe:1",
 ]
 env = {key: "1" for key in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS")}
+env["MALLOC_ARENA_MAX"] = "2"
+print(f"Inherited stack limit: {resource.getrlimit(resource.RLIMIT_STACK)}; child stack: 8388608; malloc arenas: 2", flush=True)
 with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
     result = subprocess.run(args, input=fixture.read_bytes(), stdout=out, stderr=err, env=env, timeout=5)
     size = out.tell()

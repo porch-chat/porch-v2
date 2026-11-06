@@ -101,7 +101,13 @@ impl VideoPreviewer {
         // Input is a pipe, not a pathname or URI. Neither nested references nor
         // subtitles/audio/scripts/playlists are allowed to open other resources.
         let mut child = tokio::process::Command::new(&self.limiter)
-            .args(["--as=536870912", "--cpu=4", "--nofile=32", "--"])
+            .args([
+                "--as=536870912",
+                "--cpu=4",
+                "--nofile=32",
+                "--stack=8388608",
+                "--",
+            ])
             .arg(&self.binary)
             .args([
                 "-hide_banner",
@@ -149,6 +155,8 @@ impl VideoPreviewer {
             .env("OMP_NUM_THREADS", "1")
             .env("OPENBLAS_NUM_THREADS", "1")
             .env("MKL_NUM_THREADS", "1")
+            // Bound glibc per-thread arena reservations within RLIMIT_AS.
+            .env("MALLOC_ARENA_MAX", "2")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())

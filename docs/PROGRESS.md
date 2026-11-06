@@ -168,3 +168,12 @@ Hosted a7854c7 passed Windows but failed the Linux video lifecycle preview
 (HTTP 400 instead of PNG). Linux FFmpeg may load threaded numerical libraries;
 its cleared child environment now explicitly caps OpenBLAS and MKL threads as
 well as OpenMP. Hosted rerun must prove this, not assume a diagnosis.
+
+Diagnostic hosted run 42191764371 confirms FFmpeg 8.0.1 on the hosted image
+fails pthread_create while starting the output consumer, not an authorization
+or media-signature failure. Exact allocator/stack contribution is not proven.
+Local FFmpeg 6.1.1 reproduces thread/resource failure with a 96 MiB inherited
+thread stack under the unchanged 512 MiB address-space cap. Decoder children
+now explicitly cap stack at 8 MiB and glibc arenas at two, reducing resource
+reservations rather than relaxing any decode limits. The bounded CI diagnostic
+reports inherited stack limits; hosted validation of this fix remains pending.
