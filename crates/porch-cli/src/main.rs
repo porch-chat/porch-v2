@@ -1,7 +1,4 @@
-use porch_protocol::{
-    AuthResponse, CreateInviteRequest, CreatedInvite, Invite, LoginRequest, RegisterRequest,
-    Session, User,
-};
+use porch_protocol::*;
 use reqwest::{
     Method,
     blocking::{Client, Response},
@@ -66,7 +63,7 @@ fn main() {
 fn run() -> Result<()> {
     let args: Vec<String> = env::args().skip(1).collect();
     let Some(command) = args.first().map(String::as_str) else {
-        return Err("usage: porch-cli register|login|me|sessions|logout|logout-all|revoke-session ID|invite-create USES SECONDS|invites|invite-revoke ID; credentials from PORCH_USERNAME/PORCH_PASSWORD/PORCH_INVITE/PORCH_TOKEN".into());
+        return Err("usage: porch-cli communities|community ID|community-create NAME|community-join|community-mutate ID|community-invite-create ID USES SECONDS|community-invites ID|community-invite-revoke ID INVITE_ID|register|login|me|sessions|logout|logout-all|revoke-session ID|invite-create USES SECONDS|invites|invite-revoke ID; credentials from PORCH_USERNAME/PORCH_PASSWORD/PORCH_INVITE/PORCH_TOKEN".into());
     };
     let base = env::var("PORCH_URL").unwrap_or_else(|_| "http://127.0.0.1:38147".into());
     let url = reqwest::Url::parse(&base)?;
@@ -95,6 +92,9 @@ fn run() -> Result<()> {
     };
     let expected = match command {
         "invite-create" => 3,
+        "community-invite-create" => 4,
+        "community-invite-revoke" => 3,
+        "community" | "community-create" | "community-mutate" | "community-invites" => 2,
         "revoke-session" | "invite-revoke" => 2,
         _ => 1,
     };
@@ -102,6 +102,76 @@ fn run() -> Result<()> {
         return Err("incorrect number of arguments".into());
     }
     match command {
+        "communities" => cli.read::<Vec<CommunitySummary>>("/communities")?,
+        "community" => {
+            let id: i64 = args[1].parse()?;
+            cli.read::<CommunitySnapshot>(&format!("/communities/{id}"))?;
+        }
+        "community-create" => {
+            let response: CommunitySummary = cli
+                .request(
+                    Method::POST,
+                    "/communities",
+                    Some(&CreateCommunity {
+                        name: args[1].clone(),
+                    }),
+                    true,
+                )?
+                .json()?;
+            print_json(&response)?;
+        }
+        "community-join" => {
+            let response: CommunitySummary = cli
+                .request(
+                    Method::POST,
+                    "/communities/join",
+                    Some(&JoinCommunity {
+                        code: env::var("PORCH_COMMUNITY_INVITE")?,
+                    }),
+                    true,
+                )?
+                .json()?;
+            print_json(&response)?;
+        }
+        "community-mutate" => {
+            let id: i64 = args[1].parse()?;
+            // Structured protocol command avoids an ever-growing flags dialect.
+            let body: CommunityCommand = serde_json::from_str(&env::var("PORCH_COMMAND")?)?;
+            let response: CommunityMutation = cli
+                .request(
+                    Method::POST,
+                    &format!("/communities/{id}"),
+                    Some(&body),
+                    true,
+                )?
+                .json()?;
+            print_json(&response)?;
+        }
+        "community-invite-create" => {
+            let id: i64 = args[1].parse()?;
+            let body = CreateInviteRequest {
+                max_uses: args[2].parse()?,
+                expires_in_seconds: args[3].parse()?,
+            };
+            let response: CreatedCommunityInvite = cli
+                .request(
+                    Method::POST,
+                    &format!("/communities/{id}/invites"),
+                    Some(&body),
+                    true,
+                )?
+                .json()?;
+            print_json(&response)?;
+        }
+        "community-invites" => {
+            let id: i64 = args[1].parse()?;
+            cli.read::<Vec<CommunityInvite>>(&format!("/communities/{id}/invites"))?;
+        }
+        "community-invite-revoke" => {
+            let id: i64 = args[1].parse()?;
+            let invite: i64 = args[2].parse()?;
+            cli.delete(&format!("/communities/{id}/invites/{invite}"))?;
+        }
         "gateway" => {
             gateway(&cli.base)?;
         }

@@ -19,7 +19,8 @@ and drops an isolated schema):
 
 CI explicitly runs the gateway integration and actual CLI gateway smoke, plus
 normal unit tests, identity integration, migration checks, fmt, clippy and build.
-The 200-client load test is manual/ignored so CI isn't a performance gate.
+The 200-client load test remains ignored in ordinary cargo test but CI explicitly
+runs all ignored tests serially, including this benchmark, without latency thresholds.
 
 ## Load result, sandbox loopback, 2026-11-06
 

@@ -69,6 +69,47 @@ try:
     user_token = user["token"]
     assert not user["user"]["admin"]
     cli("invite-create", 1, 3600, PORCH_TOKEN=user_token, fail=True)
+    # Phase 3 end-to-end commands, including permission-filtered visibility.
+    official = cli("communities", PORCH_TOKEN=user_token)
+    assert len(official) == 1 and official[0]["official"]
+    assert cli("community", official[0]["id"], PORCH_TOKEN=user_token)["permissions"] & 2 == 0
+    community = cli("community-create", "Smoke Club", PORCH_TOKEN=user_token)
+    cid = community["id"]
+    def mutate(token, **command):
+        return cli("community-mutate", cid, PORCH_TOKEN=token, PORCH_COMMAND=json.dumps(command))
+    category = mutate(user_token, op="create_category", name="Inside", position=0)["id"]
+    channel = mutate(user_token, op="create_channel", name="clubhouse", kind="text", category_id=category, position=0, synced=True)["id"]
+    voice = mutate(user_token, op="create_channel", name="porch swing", kind="voice", category_id=None, position=0, synced=False)["id"]
+    ci = cli("community-invite-create", cid, 2, 3600, PORCH_TOKEN=user_token)
+    cli("community-join", PORCH_TOKEN=admin_token, PORCH_COMMUNITY_INVITE=ci["code"])
+    assert len(cli("community", cid, PORCH_TOKEN=admin_token)["members"]) == 2
+    mutate(user_token, op="set_overwrites", channel_id=None, category_id=category,
+           overwrites=[{"target":{"kind":"everyone"}, "allow":0, "deny":1}])
+    snapshot = cli("community", cid, PORCH_TOKEN=admin_token)
+    assert len(snapshot["channels"]) == 1 and not snapshot["categories"]
+    assert "clubhouse" not in json.dumps(snapshot)
+    role = mutate(user_token, op="create_role", name="Regular", permissions=1, position=1)["id"]
+    mutate(user_token, op="set_overwrites", channel_id=None, category_id=category,
+           overwrites=[{"target":{"kind":"everyone"},"allow":0,"deny":1},
+                       {"target":{"kind":"role","id":role},"allow":1,"deny":0}])
+    mutate(user_token, op="set_member_roles", user_id=admin["user"]["id"], role_ids=[role])
+    assert len(cli("community", cid, PORCH_TOKEN=admin_token)["channels"]) == 2
+    mutate(user_token, op="set_member_roles", user_id=admin["user"]["id"], role_ids=[])
+    assert len(cli("community", cid, PORCH_TOKEN=admin_token)["channels"]) == 1
+    mutate(user_token, op="ban", user_id=admin["user"]["id"])
+    cli("community-join", PORCH_TOKEN=admin_token, PORCH_COMMUNITY_INVITE=ci["code"], fail=True)
+    mutate(user_token, op="unban", user_id=admin["user"]["id"])
+    cli("community-join", PORCH_TOKEN=admin_token, PORCH_COMMUNITY_INVITE=ci["code"])
+    listed = cli("community-invites", cid, PORCH_TOKEN=user_token)
+    assert listed[0]["uses"] == 2 and "code" not in json.dumps(listed)
+    cli("community-invite-revoke", cid, ci["id"], PORCH_TOKEN=user_token)
+    mutate(admin_token, op="leave")
+    mutate(user_token, op="delete_channel", id=channel)
+    mutate(user_token, op="delete_category", id=category)
+    mutate(user_token, op="delete_channel", id=voice)
+    mutate(user_token, op="delete_role", id=role)
+    mutate(user_token, op="delete")
+    cli("community", cid, PORCH_TOKEN=user_token, fail=True)
     other = cli("login", PORCH_USERNAME="smoke_user", PORCH_PASSWORD=password)
     sessions = cli("sessions", PORCH_TOKEN=user_token)
     assert len(sessions) == 2
@@ -81,7 +122,7 @@ try:
     cli("register", PORCH_USERNAME="smoke_denied", PORCH_PASSWORD=password, PORCH_INVITE=invite["code"], fail=True)
     cli("logout", PORCH_TOKEN=admin_token)
     cli("me", PORCH_TOKEN=admin_token, fail=True)
-    print("CLI identity smoke passed, bootstrap/register/login/invites/session revocation/logout proven over HTTP")
+    print("CLI identity + community smoke passed, bootstrap/register/login/invites/session revocation/logout proven over HTTP")
 finally:
     server.terminate()
     server.communicate(timeout=10)
