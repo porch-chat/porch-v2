@@ -1,3 +1,4 @@
+mod media;
 use crate::{
     session::{Bridge, Command, Snapshot},
     settings::Settings,
@@ -571,6 +572,7 @@ impl Porch {
                         )))
                     })
                     .child(div().whitespace_normal().child(text.clone()))
+                    .child(self.attachments(message, cx))
                     .when(!message.reactions.is_empty(), |d| {
                         d.child(small(
                             message
@@ -842,6 +844,7 @@ impl Porch {
                                 ),
                         )
                     })
+                    .child(self.transfers(cx))
                     .child(Input::new(&self.composer))
                     .child(
                         div()
@@ -849,6 +852,15 @@ impl Porch {
                             .justify_between()
                             .items_center()
                             .child(small("Enter to send · Shift+Enter for a new line"))
+                            .child(
+                                Button::new("choose-file")
+                                    .ghost()
+                                    .label("Choose file")
+                                    .disabled(self.editing.is_some() || self.snapshot.busy)
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.choose_file(window, cx)
+                                    })),
+                            )
                             .child(
                                 Button::new("send")
                                     .primary()

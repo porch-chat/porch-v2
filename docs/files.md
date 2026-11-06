@@ -122,3 +122,29 @@ The IANA address policy is conservative and must be maintained when registries
 change. Outbound fetching is disabled by default, including if storage is enabled.
 No remote success integration or production network egress is claimed by the
 hermetic policy/response/authorization tests.
+
+Native media actions
+--------------------
+
+The desktop stages one file through the platform file picker, hashes it on the
+session worker, and does not transmit contents until Upload/Resume is clicked.
+One authoritative-offset chunk advances per worker tick; progress uses committed
+bytes, and reconnect failures stop until explicit Resume. Cancel is processed
+after any in-flight chunk/request, not an instantaneous socket interruption.
+Ready files have a separate Send file action, backed by the durable outbox.
+The source path stays only in the account-bound SQLite cache.
+
+Received cards save through a native destination dialog with create-new,
+private permissions, streamed bounded bytes and SHA-256 verification. Existing
+destinations are never overwritten; failures/cancellation remove partial files.
+Downloads currently use the common 20-second request timeout and do not resume.
+An original is never launched or handed to a shell. Save requires the referenced
+message in the most recent 200 cached messages for that conversation.
+
+Load preview explicitly requests an authenticated server PNG, verifies bounded
+PNG dimensions/decoding off the render thread, and keeps at most eight previews
+in memory. Navigation, message deletion and account changes clear visible
+previews. Link details are an explicit opt-in per Markdown link, rendered as
+plain text with no remote images. The picker/save dialogs use GPUI platform APIs,
+not custom filesystem browsing. Linux/Windows interactive dialog, DPI, IME and
+assistive-technology acceptance still requires real user testing.

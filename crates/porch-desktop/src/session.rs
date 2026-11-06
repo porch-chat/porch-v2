@@ -1,8 +1,9 @@
 //! UI-independent bridge. Secrets stay on the worker, never in snapshots/settings.
-use porch_core::{Api, Engine, GatewayTask, PendingSend, RemovalNotice};
+use porch_core::{Api, Engine, GatewayTask, PendingSend, PendingUpload, RemovalNotice};
 use porch_protocol::*;
 use sha2::{Digest, Sha256};
 use std::{
+    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
@@ -24,6 +25,11 @@ pub struct Snapshot {
     pub queued: Option<u64>,
     pub edited: Option<u64>,
     pub busy: bool,
+    pub uploads: Vec<PendingUpload>,
+    pub transferring: HashSet<String>,
+    pub previews: HashMap<String, Arc<Vec<u8>>>,
+    pub embeds: HashMap<i64, LinkEmbed>,
+    pub saved: Option<String>,
 }
 pub enum Command {
     Login {
@@ -33,6 +39,32 @@ pub enum Command {
         invite: Option<String>,
     },
     Select(i64),
+    ChooseFile {
+        conversation: i64,
+        path: PathBuf,
+    },
+    ResumeUpload(String),
+    CancelUpload(String),
+    SendFile {
+        conversation: i64,
+        upload: String,
+    },
+    Preview {
+        conversation: i64,
+        message: i64,
+        file: String,
+    },
+    Download {
+        conversation: i64,
+        message: i64,
+        file: String,
+        path: PathBuf,
+    },
+    Embed {
+        conversation: i64,
+        message: i64,
+        url: String,
+    },
     Send {
         id: u64,
         conversation: i64,
@@ -181,6 +213,7 @@ impl Session {
         self.view.heads = engine.cache().heads().await?;
         self.view.communities = engine.cache().communities().await?;
         self.view.pending = engine.cache().pending().await?;
+        self.view.uploads = engine.pending_uploads().await?;
         self.view.notice = engine.cache().removal_notice().await?;
         if self
             .view
@@ -195,6 +228,19 @@ impl Session {
         } else {
             self.view.messages.clear();
         }
+        // Do not retain decoded media or metadata after navigation, deletion or
+        // permission-driven message invalidation.
+        let files: HashSet<_> = self
+            .view
+            .messages
+            .iter()
+            .filter(|m| !m.deleted)
+            .flat_map(|m| m.attachments.iter().map(|a| a.id.clone()))
+            .collect();
+        self.view.previews.retain(|id, _| files.contains(id));
+        self.view
+            .embeds
+            .retain(|id, _| self.view.messages.iter().any(|m| m.id == *id && !m.deleted));
         self.view.state = self
             .gateway
             .as_ref()
@@ -214,6 +260,95 @@ impl Session {
         }
         let engine = self.engine.clone().ok_or(porch_core::Error::InvalidData)?;
         match command {
+            Command::ChooseFile { conversation, path } => {
+                engine.begin_upload(conversation, path).await?;
+                // Choice hashes and stages locally; Resume is separate consent.
+            }
+            Command::ResumeUpload(id) => {
+                if !engine
+                    .pending_uploads()
+                    .await?
+                    .iter()
+                    .any(|u| u.status.id == id && u.status.state == UploadState::Receiving)
+                {
+                    return Err(porch_core::Error::InvalidData);
+                }
+                self.view.transferring.insert(id);
+            }
+            Command::CancelUpload(id) => {
+                self.view.transferring.remove(&id);
+                engine.cancel_upload(&id).await?;
+            }
+            Command::SendFile {
+                conversation,
+                upload,
+            } => {
+                if engine
+                    .cache()
+                    .pending()
+                    .await?
+                    .iter()
+                    .any(|p| p.request.attachments.contains(&upload))
+                {
+                    return Err(porch_core::Error::InvalidData);
+                }
+
+                if !engine.pending_uploads().await?.iter().any(|u| {
+                    u.status.id == upload
+                        && u.status.conversation_id == conversation
+                        && u.status.state == UploadState::Ready
+                }) {
+                    return Err(porch_core::Error::InvalidData);
+                }
+                engine
+                    .queue_attachments(
+                        conversation,
+                        MessageContent::Markdown {
+                            text: String::new(),
+                        },
+                        None,
+                        vec![],
+                        false,
+                        vec![upload],
+                    )
+                    .await?;
+                tokio::spawn(async move {
+                    let _ = engine.flush().await;
+                });
+            }
+            Command::Preview {
+                conversation,
+                message,
+                file,
+            } => {
+                if self.view.previews.len() >= 8 {
+                    self.view.previews.clear();
+                }
+                let bytes = engine
+                    .attachment_preview(conversation, message, &file)
+                    .await?;
+                self.view.previews.insert(file, Arc::new(bytes));
+            }
+            Command::Download {
+                conversation,
+                message,
+                file,
+                path,
+            } => {
+                self.view.saved = None;
+                engine
+                    .download_attachment(conversation, message, &file, &path)
+                    .await?;
+                self.view.saved = Some("File saved. Files are never opened automatically.".into());
+            }
+            Command::Embed {
+                conversation,
+                message,
+                url,
+            } => {
+                let embed = engine.link_embed(conversation, message, url).await?;
+                self.view.embeds.insert(message, embed);
+            }
             Command::Select(id) => {
                 if !self.view.heads.iter().any(|h| h.id == id) {
                     return Err(porch_core::Error::InvalidData);
@@ -381,7 +516,15 @@ async fn worker(
                 if let Err(e)=session.command(command).await{session.view.error=Some(e.to_string());}
                 session.view.busy=false;
             },
-            _=tick.tick()=>{}
+            _=tick.tick()=>{
+                if let Some(id)=session.view.transferring.iter().next().cloned()
+                    && let Some(engine)=session.engine.clone() {
+                    match engine.advance_upload(&id).await {
+                        Ok(upload)=>{if upload.status.state!=UploadState::Receiving {session.view.transferring.remove(&id);}},
+                        Err(e)=>{session.view.transferring.remove(&id);session.view.error=Some(e.to_string());}
+                    }
+                }
+            }
         }
         if let Err(e) = session.refresh().await {
             session.view.error = Some(e.to_string());
@@ -475,9 +618,20 @@ mod integration {
         let gateway = Gateway::new(identity.clone());
         let bus: Arc<dyn EventBus> = Arc::new(gateway.clone());
         identity.set_event_bus(&bus);
+        let storage = tempfile::tempdir().unwrap();
+        let files = porch_server::files::FileService::new(
+            pool.clone(),
+            identity.clone(),
+            Arc::new(
+                porch_server::storage::LocalStorage::new(&storage.path().join("objects")).unwrap(),
+            ),
+        );
+        let embeds = porch_server::embeds::EmbedService::new(pool.clone(), identity.clone());
         let app = CommunityService::new(pool.clone(), identity.clone(), bus.clone())
             .routes()
             .merge(MessagingService::new(pool.clone(), identity.clone(), bus).routes())
+            .merge(files.routes())
+            .merge(embeds.routes())
             .merge(identity::routes(identity))
             .merge(gateway.routes());
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -562,6 +716,112 @@ mod integration {
             Some(2),
             "failed edit must not acknowledge/clear composer"
         );
+
+        let source = root.path().join("porch.png");
+        std::fs::write(
+            &source,
+            include_bytes!("../../../assets/brand/icons/porch-128.png"),
+        )
+        .unwrap();
+        bridge
+            .commands
+            .send(Command::ChooseFile {
+                conversation: dm,
+                path: source.clone(),
+            })
+            .await
+            .unwrap();
+        let staged = receive(&bridge, |s| s.uploads.len() == 1 && !s.busy).await;
+        assert!(staged.error.is_none(), "{:?}", staged.error);
+        let upload = staged.uploads[0].status.id.clone();
+        assert_eq!(
+            staged.uploads[0].status.received, 0,
+            "choosing must not upload"
+        );
+        bridge
+            .commands
+            .send(Command::ResumeUpload(upload.clone()))
+            .await
+            .unwrap();
+        let ready = receive(&bridge, |s| {
+            s.uploads
+                .iter()
+                .any(|u| u.status.state == UploadState::Ready)
+        })
+        .await;
+        assert!(ready.error.is_none(), "{:?}", ready.error);
+        assert!(!ready.transferring.contains(&upload));
+        bridge
+            .commands
+            .send(Command::SendFile {
+                conversation: dm,
+                upload: upload.clone(),
+            })
+            .await
+            .unwrap();
+        let attached = receive(&bridge, |s| {
+            s.messages.iter().any(|m| !m.attachments.is_empty())
+        })
+        .await;
+        let mid = attached
+            .messages
+            .iter()
+            .find(|m| !m.attachments.is_empty())
+            .unwrap()
+            .id;
+        bridge
+            .commands
+            .send(Command::Preview {
+                conversation: dm,
+                message: mid,
+                file: upload.clone(),
+            })
+            .await
+            .unwrap();
+        let preview = receive(&bridge, |s| s.previews.contains_key(&upload)).await;
+        assert!(preview.previews[&upload].starts_with(b"\x89PNG\r\n\x1a\n"));
+        let saved = root.path().join("saved.png");
+        bridge
+            .commands
+            .send(Command::Download {
+                conversation: dm,
+                message: mid,
+                file: upload,
+                path: saved.clone(),
+            })
+            .await
+            .unwrap();
+        receive(&bridge, |s| s.saved.is_some() && !s.busy).await;
+        assert_eq!(
+            std::fs::read(&source).unwrap(),
+            std::fs::read(&saved).unwrap()
+        );
+        bridge
+            .commands
+            .send(Command::ChooseFile {
+                conversation: dm,
+                path: source,
+            })
+            .await
+            .unwrap();
+        let pending = receive(&bridge, |s| s.uploads.len() == 2 && !s.busy).await;
+        let cancel = pending
+            .uploads
+            .iter()
+            .find(|u| u.status.state == UploadState::Receiving)
+            .unwrap()
+            .status
+            .id
+            .clone();
+        bridge
+            .commands
+            .send(Command::CancelUpload(cancel.clone()))
+            .await
+            .unwrap();
+        receive(&bridge, |s| {
+            !s.uploads.iter().any(|u| u.status.id == cancel) && !s.busy
+        })
+        .await;
         bridge.commands.send(Command::Select(999999)).await.unwrap();
         let invalid = receive(&bridge, |s| s.error.is_some() && !s.busy).await;
         assert_eq!(invalid.selected, Some(dm));
@@ -571,6 +831,9 @@ mod integration {
         })
         .await;
         assert!(logout.heads.is_empty() && logout.messages.is_empty() && logout.pending.is_empty());
+        assert!(
+            logout.uploads.is_empty() && logout.previews.is_empty() && logout.embeds.is_empty()
+        );
         drop(bridge);
         server.abort();
         pool.close().await;

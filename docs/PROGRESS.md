@@ -134,3 +134,12 @@ Guarded opt-in link metadata now has policy/response limits and actual
 Postgres/HTTP authorization tests. CLI message-embed CONVERSATION MESSAGE uses
 PORCH_LINK, with no arbitrary unauthenticated URL fetching. Remote network success,
 native attachment UI and video previews remain separate unfinished work.
+
+Phase 7 native files (in progress): core media commit 6e1ad71 adds verified
+streaming save and bounded authenticated PNG loading. Desktop now has native
+choose/save dialogs, separate stage/upload/resume/send/cancel actions, committed
+byte progress, received attachment cards and opt-in link metadata/image preview.
+Disposable Postgres + actual HTTP desktop worker test passes stage(no upload),
+resume/finalize/send, thumbnail, exact save, cancel and logout purge. This is not
+interactive platform-dialog or Windows runtime acceptance. Video preview remains
+unfinished; Phase 7 is not complete.

@@ -4712,6 +4712,7 @@ dependencies = [
  "porch-core",
  "porch-protocol",
  "porch-server",
+ "pulldown-cmark",
  "rand 0.8.8",
  "serde",
  "serde_json",

@@ -14,6 +14,7 @@ serde.workspace = true
 serde_json.workspace = true
 sha2 = "0.10"
 async-channel = "2"
+pulldown-cmark = "0.13.6"
 # GPUI's published async-tar/xattr 0.2 requires Linux ENOATTR removed in libc0.2.190.
 # Remove this compatibility pin when the published upstream dependency is fixed.
 [target.'cfg(unix)'.dependencies]
