@@ -1,0 +1,19 @@
+name: porch-v2-dev
+services:
+  postgres:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_USER: porch
+      POSTGRES_PASSWORD: porch_dev_only
+      POSTGRES_DB: porch
+    ports:
+      - "127.0.0.1:39463:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U porch -d porch"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+volumes:
+  postgres_data:

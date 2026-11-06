@@ -1,0 +1,35 @@
+# UNDEPLOYED skeleton only. No DNS, proxy or production configuration exists.
+name: porch-v2
+services:
+  server:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    environment:
+      DATABASE_URL: postgres://porch:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/porch
+      PORCH_BIND: 0.0.0.0:38147
+      RUST_LOG: ${RUST_LOG:-info}
+    ports:
+      - "127.0.0.1:38147:38147"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    init: true
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+  postgres:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_USER: porch
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: porch
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U porch -d porch"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+volumes:
+  postgres_data:
