@@ -62,6 +62,18 @@ PORCH_SMOKE_SECONDS (1-120) to exit an isolated launch. Never put tokens in
 arguments, settings, screenshots or checked-in scripts. No sample/fake chat
 is displayed by the production binary.
 
-Local Xvfb/Mesa smoke started the native process, authenticated and reconciled
-the real cache, then exited cleanly. Captured frames were entirely black in this
-sandbox, so no usable screenshot/layout acceptance is claimed.
+Local Xvfb + Openbox + Mesa smoke started the native process, authenticated and
+reconciled the real cache, then exited cleanly. A real native mouse click and
+keyboard Enter through the composer sent a message which was acknowledged by
+the loopback backend and reconciled to SQLite. An inspected screenshot shows
+the actual rail/sidebar/conversation/member layout. Xvfb without a window manager
+produced black captures; Openbox was required in this sandbox. This is headless
+software-rendered evidence, not real hardware/IME/DPI or Windows runtime acceptance.
+
+The reproducible Linux smoke is scripts/desktop-smoke.py. Use an empty disposable
+Postgres database and run under a 1440x1000 Xvfb display with Openbox, xdotool and
+ImageMagick installed. It creates fixture messages, authenticates the native
+process, types into the real composer, verifies delivery through the CLI and
+exits. PORCH_SMOKE_SCREENSHOT optionally saves a fixture-only screenshot. CI
+runs it in a separate empty database with Mesa software Vulkan. This smoke
+does not exercise the interactive password form, other devices or real drivers.

@@ -32,7 +32,7 @@ jobs:
       - name: Install pinned Rust toolchain
         run: rustup show active-toolchain
       - name: Install Linux desktop libraries
-        run: sudo apt-get update && sudo apt-get install -y libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb1-dev libasound2-dev libfontconfig1-dev libssl-dev libvulkan1 fonts-dejavu-core
+        run: sudo apt-get update && sudo apt-get install -y libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb1-dev libasound2-dev libfontconfig1-dev libssl-dev libvulkan1 fonts-dejavu-core mesa-vulkan-drivers xvfb openbox xdotool imagemagick
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
         with:
@@ -45,12 +45,22 @@ jobs:
       - run: cargo test --workspace --locked --doc
       - run: cargo build --workspace --locked
       - run: python3 scripts/identity-smoke.py
+      - name: Native headless keyboard smoke
+        env:
+          PGPASSWORD: ci_only
+          PORCH_SMOKE_SCREENSHOT: target/native-smoke.png
+        run: |
+          psql -h localhost -U porch -d postgres -c 'CREATE DATABASE porch_desktop_smoke'
+          export DATABASE_URL=postgres://porch:ci_only@localhost:5432/porch_desktop_smoke
+          export VK_ICD_FILENAMES="$(find /usr/share/vulkan/icd.d -name '*lvp*' -print -quit)"
+          xvfb-run -a -s '-screen 0 1440x1000x24' python3 scripts/desktop-smoke.py
 
       - uses: actions/upload-artifact@v4
         with:
           name: porch-linux-x86_64-debug
           path: |
             target/debug/porch-desktop
+            target/native-smoke.png
             assets/brand/fonts/OFL-Manrope.txt
           retention-days: 7
   windows-desktop:

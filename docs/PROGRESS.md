@@ -90,8 +90,11 @@ preferences. Details and known v1 limits are in desktop.md and ADR-0007.
 Local fmt/clippy/build, 36 default tests, all 8 ignored Postgres/integration/load
 tests and actual multiprocess CLI smoke passed. Session bridge has actual HTTP/WS
 and Postgres tests, no fake chat data. Linux native startup with Xvfb/Mesa and a
-real loopback backend exited cleanly, but captured frames are entirely black, so
-no usable screenshot or graphical acceptance is claimed. System fallback fonts
+real loopback backend exited cleanly. Xvfb alone initially captured black frames;
+adding Openbox fixed rendering and an inspected screenshot shows the native
+layout. A real mouse click/type/Enter through the composer produced a real
+backend-acknowledged cached message. This is headless software-rendered evidence,
+not graphical hardware/IME/DPI or Windows runtime acceptance. System fallback fonts
 are a native prerequisite in addition to the embedded application font.
 Hosted Linux + Windows build/artifact CI is pending. Windows compilation,
 real Windows/Linux graphical/IME/DPI acceptance and runtime hardware testing are
