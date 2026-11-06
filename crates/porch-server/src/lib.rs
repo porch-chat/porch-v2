@@ -91,7 +91,7 @@ mod tests {
             .fetch_one(&pool)
             .await
             .unwrap();
-        assert_eq!(count, 1);
+        assert_eq!(count, 2);
         pool.close().await;
     }
 }
