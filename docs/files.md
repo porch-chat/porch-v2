@@ -1,4 +1,4 @@
-# Private files (Phase 7 in progress)
+# Private files (Phase 7 automated scope complete)
 
 Enable file routes with an absolute PORCH_STORAGE_ROOT whose directory is private
 to the server operator (0700 on Unix). Unset means file routes are disabled.
@@ -52,9 +52,10 @@ It proves storage mechanics, not a 1 GiB full HTTP/UI round trip.
 
 Phase 7 local implementation now includes backend/CLI/shared-core transfers,
 raster thumbnails, optional video posters, guarded server-side embeds and native
-attachment actions. Final headless media evidence and hosted Linux/Windows CI
-remain completion gates. Native runtime/DPI/IME/hardware acceptance remains
-Dylan's, separate from automated checks. No deployment has occurred.
+attachment actions. Local and hosted headless media evidence and Linux/Windows
+CI passed at 620bbca. Native runtime, interactive picker/save dialogs, DPI/IME
+and hardware acceptance remain Dylan's, separate from automated checks. No
+deployment has occurred. See the verification record below.
 
 CLI transfer proof uses file-create CONVERSATION PATH, file-status ID,
 file-resume ID PATH, file-upload CONVERSATION PATH, file-complete ID,
@@ -156,7 +157,10 @@ PNG poster. This is not inline playback or an animated thumbnail. Pipe-based
 MP4 decoding may fail for non-streamable files; any unsupported/invalid video
 remains downloadable, never auto-opened. Two concurrent decoder processes,
 five-second wall timeout, four CPU seconds, 512 MiB virtual-address-space and
-32-file-descriptor limits apply. FFmpeg allocations are individually capped at
+32-file-descriptor limits apply. Child stack is capped at 8 MiB and glibc
+allocator arenas at two (MALLOC_ARENA_MAX=2); OpenMP/OpenBLAS/MKL threads are
+capped at one. These reduce reservations without increasing the 512 MiB cap.
+FFmpeg allocations are individually capped at
 32 MiB and output at 2 MiB before a second raster validation/re-encoding pass.
 Cancellation kills the child; process drop also has kill-on-drop enabled.
 
@@ -168,3 +172,29 @@ No such deployment or isolation configuration has been performed in this phase.
 All generated media is fixture-only; tests exercise real FFmpeg poster output,
 default-disabled behavior, auth/scope/deletion denial, excessive size/concurrency,
 and malformed HTML, playlist, local-file-reference and truncated container input.
+
+
+## Verification record, 2026-11-06
+
+Phase 7 automated scope passed locally and on GitHub-hosted Linux and Windows
+at 620bbca, run https://github.com/porch-chat/porch-v2/actions/runs/42193393398
+Linux passed fmt/clippy, 49 default and all 12 explicitly ignored tests, doctests,
+workspace build, real CLI smoke, interactive headless login/composer and
+authenticated native media poster smoke. Windows passed desktop clippy, tests
+and build; this is not Windows runtime acceptance.
+
+Linux artifact (includes native screenshots):
+https://github.com/porch-chat/porch-v2/actions/runs/42193393398/artifacts/13491626131
+Windows artifact:
+https://github.com/porch-chat/porch-v2/actions/runs/42193393398/artifacts/13490404786
+Artifacts are private debug builds with seven-day retention, not releases.
+
+Local native pixel proof is docs/evidence/phase7-linux-media.png, produced by
+scripts/desktop-media-smoke.py using an actual authenticated upload and explicit
+Load preview click. Two interior pixels assert the generated amber poster.
+Hosted Linux repeats that harness, not just an image-only unit test.
+The 1 GiB test proves streaming storage, not a full 1 GiB HTTP/UI transfer.
+Remote embed success, video playback, interactive picker/save dialogs, Windows
+runtime and real hardware/DPI/IME acceptance are not claimed. FFmpeg remains
+disabled by default and opt-in limits are not an OS sandbox. Phase 8 deployment
+is not authorized and no deployment or infrastructure changes occurred.

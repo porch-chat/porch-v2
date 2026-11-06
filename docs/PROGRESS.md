@@ -177,3 +177,31 @@ thread stack under the unchanged 512 MiB address-space cap. Decoder children
 now explicitly cap stack at 8 MiB and glibc arenas at two, reducing resource
 reservations rather than relaxing any decode limits. The bounded CI diagnostic
 reports inherited stack limits; hosted validation of this fix remains pending.
+
+
+Phase 7 final automated gate passed at 620bbca. Hosted run
+https://github.com/porch-chat/porch-v2/actions/runs/42193393398
+succeeded for both Linux (468 seconds) and Windows (219 seconds); workflow
+duration was 471 seconds. Linux passed all 49 default and all 12 explicitly
+ignored tests, real CLI smoke, native keyboard smoke and authenticated native
+poster pixel proof. Local fmt/clippy/workspace tests/build and the same 12
+ignored tests also passed after the decoder reservation fix. No decode safety
+limit was raised. The exact allocator/stack cause remains unproven, despite
+confirmed prior hosted pthread_create failure and the now-green bounded fixture.
+
+Linux debug build and hosted native screenshots:
+https://github.com/porch-chat/porch-v2/actions/runs/42193393398/artifacts/13491626131
+Windows debug build:
+https://github.com/porch-chat/porch-v2/actions/runs/42193393398/artifacts/13490404786
+Private artifacts expire after seven days. Local inspected poster evidence is
+docs/evidence/phase7-linux-media.png; scripts/desktop-media-smoke.py repeats
+the actual authenticated request, native click and two amber-pixel assertions.
+
+This completes Phase 7's implemented automated scope, not graphical user
+acceptance. Static posters are not playback; FFmpeg is default-off opt-in and
+not an OS sandbox. Remote embed success, interactive picker/save dialogs,
+Windows runtime and real hardware/DPI/IME acceptance remain unclaimed or Dylan
+checks. The 1 GiB proof is streaming storage, not full HTTP/UI. No deployment,
+PC access or infrastructure changes occurred. Phase 8 deployment is not
+authorized. This final record is a docs-only change; hosted CI ignores Markdown
+under docs, so 620bbca is the tested code parent rather than a new CI run.

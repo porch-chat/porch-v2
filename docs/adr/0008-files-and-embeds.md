@@ -1,5 +1,5 @@
 # ADR-0008: scoped resumable objects and untrusted previews
-Status: in progress, Phase 7 is NOT complete
+Status: accepted; Phase 7 automated scope complete, manual acceptance outstanding
 Date: 2026-11-06
 
 Contract first. Files are private scoped objects, not public URLs or filesystem
@@ -47,5 +47,22 @@ not a decoder exploit sandbox; disabled by default, require operator isolation
 before use with untrusted users. See files.md for exact limits and configuration.
 Static posters are previews, not video playback. No deployment or PC access.
 
-Final headless native media evidence and hosted Linux/Windows CI are outstanding
-Phase 7 gates; real platform dialogs/hardware/DPI/IME acceptance remains Dylan's.
+Local and hosted headless native media evidence passed, including an actual
+authenticated poster request and rendered-pixel assertions. Hosted Linux and
+Windows CI passed at 620bbca:
+https://github.com/porch-chat/porch-v2/actions/runs/42193393398
+Linux artifact:
+https://github.com/porch-chat/porch-v2/actions/runs/42193393398/artifacts/13491626131
+Windows artifact:
+https://github.com/porch-chat/porch-v2/actions/runs/42193393398/artifacts/13490404786
+Local fmt/clippy/workspace tests/build passed with 49 default and all 12 ignored
+tests, including real Postgres/HTTP, CLI lifecycle and 1 GiB streaming storage.
+Native evidence is docs/evidence/phase7-linux-media.png; hosted artifacts include
+fresh headless screenshots. Static posters are not playback; remote embed
+success is unclaimed. Real platform dialogs, Windows runtime, hardware/DPI/IME
+acceptance remain Dylan's. See files.md for boundaries and artifact retention.
+
+The hosted FFmpeg 8.0.1 failure was pthread_create EAGAIN. Exact allocator/stack
+causality is unproven; explicit 8 MiB stack and two glibc arenas pass both local
+and hosted fixtures without raising the unchanged 512 MiB address-space cap.
+No Phase 8 deployment or infrastructure work is authorized by this completion.
