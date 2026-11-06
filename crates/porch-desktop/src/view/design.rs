@@ -141,6 +141,29 @@ impl Porch {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn message(author: i64, time: &str) -> Message {
+        serde_json::from_value(serde_json::json!({
+            "id":1,"conversation_id":1,"author_id":author,"nonce":"fixture",
+            "content":{"format":"markdown","text":"hello"},"rendered_html":null,
+            "reply_to":null,"mentions":[],"mention_everyone":false,"created_at":time,
+            "edited_at":null,"deleted":false,"pinned":false,"reactions":[],"revision":1
+        }))
+        .unwrap()
+    }
+    #[::core::prelude::v1::test]
+    fn grouping_preserves_author_time_and_reply_boundaries() {
+        let first = message(1, "2026-11-06 13:00:00+00");
+        let mut next = message(1, "2026-11-06 13:04:59+00");
+        assert!(grouped(&first, &next));
+        next.created_at = "2026-11-06 13:05:00+00".into();
+        assert!(!grouped(&first, &next));
+        next.created_at = first.created_at.clone();
+        next.author_id = 2;
+        assert!(!grouped(&first, &next));
+        next.author_id = 1;
+        next.reply_to = Some(99);
+        assert!(!grouped(&first, &next));
+    }
     #[::core::prelude::v1::test]
     fn postgres_timestamp_formats_as_a_clock() {
         assert!(parse_time("2026-11-06 13:00:53.839435+00").is_ok());

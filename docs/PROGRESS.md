@@ -226,3 +226,9 @@ Native cargo check passed with clang 21 + GLib; full workspace checks and hosted
 Linux/Windows acceptance still pending. Isolated backend 11a4cfb deployed and real
 control-plane smoke passed; public API hostname conflicts with old Fluxer route,
 so no existing service route was changed. DNS voice added, api already correct.
+
+## Desktop design polish (2026-11-06)
+
+Native Evening Threshold conversation layout now uses compact author/time groups, deterministic initial avatars, embedded line icons, hover-only message actions, community selection/unread pills, collapsible channel categories, inline connected voice participants, role-grouped members, and the bottom user/composer panels. No server contracts or backend behavior changed. Missing member names and live text presence remain explicitly unavailable rather than fabricated (ADR 0010).
+
+Proof: `docs/evidence/ui-polish-conversation.png`, `ui-polish-hover.png`, and `ui-polish-media.png`. The first two use four real disposable accounts, eight API-created messages, categories, text/voice channels and a downloaded-file card; the media proof explicitly loads the authenticated generated video poster. `scripts/desktop-polish-proof.py` reproduces the conversation fixture. No active microphone/hardware or Windows runtime acceptance is implied. The existing native keyboard/login/send smoke and authenticated poster smoke passed locally, along with fmt, strict workspace clippy, workspace tests and build. Hosted Linux/Windows acceptance is tracked against the final commit, not claimed from these local checks.
