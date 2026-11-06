@@ -77,6 +77,10 @@ with tempfile.TemporaryDirectory(prefix="porch-media-smoke-") as directory:
             subprocess.run(["xdotool", "search", "--sync", "--name", "^Porch$"],
                            env=env, check=True, timeout=20, stdout=subprocess.DEVNULL)
             time.sleep(3)
+            # Redesign opens on Home/People; open the first room in the sidebar.
+            subprocess.run(["xdotool", "mousemove", "170", "205", "sleep", "0.5", "click", "1"],
+                           env=env, check=True, timeout=10)
+            time.sleep(3)
             # The acceptance harness uses inspected fixed-size Xvfb coordinates.
             # Caller supplies the inspected Load preview point, not a blind guess.
             point = os.environ.get("PORCH_PREVIEW_CLICK")

@@ -1096,7 +1096,9 @@ impl Porch {
             .justify_start()
             .w_full()
             .on_click(cx.listener(move |this, _, _, cx| {
+                this.people_view = false;
                 this.command(Command::Select(id), cx);
+                cx.notify();
             }))
     }
     fn message(&self, message: &Message, grouped: bool, cx: &mut Context<Self>) -> Div {
