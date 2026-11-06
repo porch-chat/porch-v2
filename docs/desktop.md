@@ -77,3 +77,12 @@ the actual native sign-in form, types into the real composer, verifies delivery
 through the CLI and exits. Password entry uses stdin, never process argv. PORCH_SMOKE_SCREENSHOT optionally saves a fixture-only screenshot. CI
 runs it in a separate empty database with Mesa software Vulkan. This smoke
 does not exercise other devices or real drivers.
+
+## Captured evidence
+
+[Native Linux software-rendered login and message-delivery smoke](evidence/phase6-linux-headless.png)
+uses generated fixture accounts and a disposable local database. It is not a
+production deployment or Windows/Dylan hardware runtime acceptance. CI also
+includes its own screenshot inside the Linux debug artifact. Download artifacts
+from the specific successful run, not a moving latest-build URL; GitHub sign-in
+is required for this private repository and artifacts expire after seven days.
