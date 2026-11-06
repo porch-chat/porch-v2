@@ -25,3 +25,10 @@ who cannot view/connect. Direct HTTP denials do not alone prove SFU revocation t
 Try two separate external networks. Current transport offers direct UDP 39782 with
 TCP 39781 fallback, no TURN. Report restrictive-network failures without claiming
 universal connectivity. Capture OS/build, device names and direction when reporting.
+
+Headless native evidence is saved at `docs/evidence/phase8-voice.png`.
+This is a real GPUI client logged into the deployed API and joined to LiveKit,
+with mute/deafen/leave, push-to-talk, participant state and device controls visible.
+The participant indicator is idle/muted, not proof of detected speech.
+Audio devices are synthetic PulseAudio null/monitor devices. This screenshot
+does not establish microphone capture, audible playback or two-person media.
