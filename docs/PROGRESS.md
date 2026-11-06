@@ -152,3 +152,19 @@ resource-bounded pipe decoding with explicit caveats: not an OS sandbox, needs
 operator isolation before untrusted use, no actual deployment. Static first-frame
 previews, not playback. Final headless media proof and hosted CI still pending;
 Phase 7 is not yet complete.
+
+Phase 7 headless native media proof now passes locally. A generated MP4 fixture
+is uploaded and attached through the real CLI/backend, the native GPUI card is
+rendered, then a real xdotool click requests its authenticated PNG poster. Two
+interior pixels verify the expected amber output, and the inspected screenshot
+is docs/evidence/phase7-linux-media.png. The repeatable CI harness is
+scripts/desktop-media-smoke.py. This proves static poster rendering, not playback
+or platform picker/hardware acceptance. All 12 explicit ignored tests passed
+across the final local runs; a full-storage test initially hit local ENOSPC,
+then passed after clearing only generated build artifacts. Final hosted CI remains
+the last automated Phase 7 gate. No deployment or infrastructure work occurred.
+
+Hosted a7854c7 passed Windows but failed the Linux video lifecycle preview
+(HTTP 400 instead of PNG). Linux FFmpeg may load threaded numerical libraries;
+its cleared child environment now explicitly caps OpenBLAS and MKL threads as
+well as OpenMP. Hosted rerun must prove this, not assume a diagnosis.

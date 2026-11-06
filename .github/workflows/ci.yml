@@ -55,12 +55,24 @@ jobs:
           export VK_ICD_FILENAMES="$(find /usr/share/vulkan/icd.d -name '*lvp*' -print -quit)"
           xvfb-run -a -s '-screen 0 1440x1000x24' python3 scripts/desktop-smoke.py
 
+      - name: Native authenticated media poster smoke
+        env:
+          PGPASSWORD: ci_only
+          PORCH_MEDIA_SCREENSHOT: target/native-media-smoke.png
+          PORCH_PREVIEW_CLICK: "591,393"
+        run: |
+          psql -h localhost -U porch -d postgres -c 'CREATE DATABASE porch_media_smoke'
+          export DATABASE_URL=postgres://porch:ci_only@localhost:5432/porch_media_smoke
+          export VK_ICD_FILENAMES="$(find /usr/share/vulkan/icd.d -name '*lvp*' -print -quit)"
+          xvfb-run -a -s '-screen 0 1440x1000x24' python3 scripts/desktop-media-smoke.py
+
       - uses: actions/upload-artifact@v4
         with:
           name: porch-linux-x86_64-debug
           path: |
             target/debug/porch-desktop
             target/native-smoke.png
+            target/native-media-smoke.png
             assets/brand/fonts/OFL-Manrope.txt
           retention-days: 7
   windows-desktop:
