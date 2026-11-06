@@ -86,3 +86,8 @@ production deployment or Windows/Dylan hardware runtime acceptance. CI also
 includes its own screenshot inside the Linux debug artifact. Download artifacts
 from the specific successful run, not a moving latest-build URL; GitHub sign-in
 is required for this private repository and artifacts expire after seven days.
+
+[Minimum 950×640 window, software-rendered](evidence/phase6-minimum-size.png)
+also passed native login/send before resizing. Stacked author/timestamp metadata
+avoids collisions with message actions at this width. This still does not prove
+real hardware, operating-system DPI or IME behavior.

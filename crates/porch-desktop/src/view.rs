@@ -554,10 +554,13 @@ impl Porch {
                     .child(
                         div()
                             .flex()
-                            .items_center()
-                            .gap_3()
-                            .child(heading(author))
-                            .child(small(message.created_at.clone()))
+                            .flex_col()
+                            .min_w_0()
+                            .gap_1()
+                            .w_full()
+                            .overflow_hidden()
+                            .child(heading(author).whitespace_normal())
+                            .child(small(message.created_at.clone()).whitespace_normal())
                             .when(message.edited_at.is_some(), |d| d.child(small("edited")))
                             .when(message.pinned, |d| d.child(small("pinned"))),
                     )
@@ -583,6 +586,7 @@ impl Porch {
             row = row.child(
                 div()
                     .flex()
+                    .flex_shrink_0()
                     .flex_col()
                     .gap_1()
                     .child(
@@ -732,7 +736,12 @@ impl Porch {
                                         }
                                     })),
                             )
-                            .child(small("Plain Markdown · no remote images loaded")),
+                            .child(
+                                small("Plain Markdown · no remote images loaded")
+                                    .min_w_0()
+                                    .flex_1()
+                                    .truncate(),
+                            ),
                     )
                     .children(self.snapshot.messages.iter().map(|m| self.message(m, cx)))
                     .children(
