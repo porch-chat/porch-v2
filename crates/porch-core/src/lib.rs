@@ -3,7 +3,7 @@ mod cache;
 mod engine;
 mod gateway;
 mod transport;
-pub use cache::{Cache, PendingSend, SendState};
+pub use cache::{Cache, PendingSend, RemovalNotice, RemovedLocalSend, SendState};
 pub use engine::Engine;
 pub use gateway::{ConnectionState, GatewayTask};
 use porch_protocol::ErrorCode;
@@ -21,7 +21,7 @@ pub enum Error {
     Storage,
     InvalidData,
     AccountMismatch,
-    SignedOut,
+    SignedOut { discarded_sends: usize },
 }
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -42,7 +42,7 @@ impl From<serde_json::Error> for Error {
 pub type Result<T> = std::result::Result<T, Error>;
 impl Error {
     pub fn unauthorized(&self) -> bool {
-        matches!(self, Self::Http(401, _) | Self::SignedOut)
+        matches!(self, Self::Http(401, _) | Self::SignedOut { .. })
     }
     pub fn retryable(&self) -> bool {
         matches!(

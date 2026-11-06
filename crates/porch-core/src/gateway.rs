@@ -187,7 +187,7 @@ async fn session(
         tokio::select! {
             _=&mut deadline, if !ready => return Err(Error::Transport),
             _=interval.tick()=>{
-                if engine.is_signed_out(){return Err(Error::SignedOut)}
+                if engine.is_signed_out(){return Err(Error::SignedOut{discarded_sends:engine.discarded_sends()})}
                 if last_ack.elapsed()>timeout{return Err(Error::Transport)}
                 nonce=nonce.wrapping_add(1);
                 send_frame(&mut socket,Message::Text(serde_json::to_string(&GatewayClient::Heartbeat{nonce})?.into())).await?;

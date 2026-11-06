@@ -20,6 +20,18 @@ pub struct PendingSend {
     pub state: SendState,
     pub failure: Option<String>,
 }
+/// Local rows removed, not proof that a request was never delivered remotely.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RemovedLocalSend {
+    pub conversation_id: i64,
+    pub nonce: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RemovalNotice {
+    pub removed_at_unix_seconds: u64,
+    pub sends: Vec<RemovedLocalSend>,
+    pub delivery_may_have_succeeded: bool,
+}
 #[derive(Clone)]
 pub struct Cache {
     pub(crate) pool: SqlitePool,
@@ -60,7 +72,7 @@ impl Cache {
             .max_connections(1)
             .connect_with(options)
             .await?;
-        sqlx::raw_sql("CREATE TABLE IF NOT EXISTS binding(id INTEGER PRIMARY KEY CHECK(id=1),origin TEXT NOT NULL,user_id INTEGER NOT NULL,version INTEGER NOT NULL CHECK(version=1),profile TEXT);
+        sqlx::raw_sql("CREATE TABLE IF NOT EXISTS binding(id INTEGER PRIMARY KEY CHECK(id=1),origin TEXT NOT NULL,user_id INTEGER NOT NULL,version INTEGER NOT NULL CHECK(version=1),profile TEXT,removal_notice TEXT);
         CREATE TABLE IF NOT EXISTS conversations(id INTEGER PRIMARY KEY,data TEXT NOT NULL,revision INTEGER NOT NULL DEFAULT 0);
         CREATE TABLE IF NOT EXISTS messages(id INTEGER PRIMARY KEY,conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,revision INTEGER NOT NULL,data TEXT NOT NULL);
         CREATE INDEX IF NOT EXISTS messages_conversation ON messages(conversation_id,id);
@@ -118,8 +130,46 @@ impl Cache {
         }
         Ok((Self { pool, user }, profile))
     }
+    /// Durable latest nonempty local-removal notice. Acknowledge after displaying.
+    pub async fn removal_notice(&self) -> Result<Option<RemovalNotice>> {
+        let notice: Option<String> =
+            sqlx::query_scalar("SELECT removal_notice FROM binding WHERE id=1")
+                .fetch_one(&self.pool)
+                .await?;
+        notice.as_deref().map(parse).transpose()
+    }
+    pub async fn acknowledge_removal_notice(&self) -> Result<()> {
+        sqlx::query("UPDATE binding SET removal_notice=NULL WHERE id=1")
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
     pub async fn clear(&self) -> Result<()> {
         let mut tx = self.pool.begin().await?;
+        let rows: Vec<(i64, String)> =
+            sqlx::query_as("SELECT conversation_id,nonce FROM outbox ORDER BY id")
+                .fetch_all(&mut *tx)
+                .await?;
+        if !rows.is_empty() {
+            let notice = RemovalNotice {
+                removed_at_unix_seconds: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_err(|_| Error::InvalidData)?
+                    .as_secs(),
+                sends: rows
+                    .into_iter()
+                    .map(|(conversation_id, nonce)| RemovedLocalSend {
+                        conversation_id,
+                        nonce,
+                    })
+                    .collect(),
+                delivery_may_have_succeeded: true,
+            };
+            sqlx::query("UPDATE binding SET removal_notice=? WHERE id=1")
+                .bind(json(&notice)?)
+                .execute(&mut *tx)
+                .await?;
+        }
         for statement in [
             "DELETE FROM outbox",
             "DELETE FROM messages",
@@ -420,6 +470,26 @@ mod tests {
         cache.reset_messages(1).await.unwrap();
         assert_eq!(cache.revision(1).await.unwrap(), 0);
         assert!(cache.messages(1, None, 10).await.unwrap().is_empty());
+    }
+    #[tokio::test]
+    async fn removal_notice_survives_crash_boundary_without_draft_contents() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("cache.db");
+        let cache = Cache::open(&path, "https://porch.test", 1).await.unwrap();
+        cache.replace_heads(&[head(1)]).await.unwrap();
+        cache.enqueue(1, &request()).await.unwrap();
+        cache.clear().await.unwrap();
+        drop(cache);
+        let cache = Cache::open(&path, "https://porch.test", 1).await.unwrap();
+        let notice = cache.removal_notice().await.unwrap().unwrap();
+        assert_eq!(notice.sends.len(), 1);
+        assert_eq!(notice.sends[0].conversation_id, 1);
+        assert!(notice.delivery_may_have_succeeded);
+        assert!(!serde_json::to_string(&notice).unwrap().contains("hello"));
+        cache.clear().await.unwrap();
+        assert!(cache.removal_notice().await.unwrap().is_some());
+        cache.acknowledge_removal_notice().await.unwrap();
+        assert!(cache.removal_notice().await.unwrap().is_none());
     }
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(64))]

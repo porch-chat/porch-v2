@@ -6,8 +6,13 @@ from pathlib import Path
 import secrets
 import socket
 import subprocess
+import tempfile
+import sqlite3
 import time
 import urllib.request
+
+cache_dir = tempfile.TemporaryDirectory(prefix="porch-cli-smoke-")
+cache_path = str(Path(cache_dir.name) / "client.db")
 
 root = Path(__file__).resolve().parent.parent
 env = os.environ.copy()
@@ -103,6 +108,19 @@ try:
     dm_body = {"nonce":"smoke_direct_nonce_0001","content":{"format":"markdown","text":"direct hello"},"reply_to":None}
     cli("message-send", dm["id"], PORCH_TOKEN=user_token, PORCH_MESSAGE=json.dumps(dm_body))
     assert cli("messages", dm["id"], PORCH_TOKEN=admin_token)["messages"][0]["content"]["text"] == "direct hello"
+    # Phase 5 actual CLI-driven core, fresh processes share account-bound SQLite.
+    core_env = {"PORCH_TOKEN":user_token, "PORCH_CACHE":cache_path}
+    core = cli("core-sync", **core_env)
+    assert any(head["id"] == dm["id"] for head in core["heads"])
+    queued = cli("core-queue", dm["id"], **core_env, PORCH_MESSAGE=json.dumps(dm_body))
+    assert queued["nonce"] != dm_body["nonce"]
+    assert len(cli("core-cache", **core_env)["pending"]) == 1
+    assert cli("core-flush", **core_env)["sent"] == 1
+    assert not cli("core-cache", **core_env)["pending"]
+    cli("core-sync", **core_env)
+    assert any(m["nonce"] == queued["nonce"] for m in cli("core-messages", dm["id"], **core_env))
+    watched = cli("core-watch", **core_env, PORCH_WATCH_SECONDS="1")
+    assert "Online" in watched["states"]
     mutate(user_token, op="set_overwrites", channel_id=None, category_id=category,
            overwrites=[{"target":{"kind":"everyone"}, "allow":0, "deny":1}])
     snapshot = cli("community", cid, PORCH_TOKEN=admin_token)
@@ -135,6 +153,10 @@ try:
     assert len(sessions) == 2
     cli("revoke-session", next(s["id"] for s in sessions if s["current"]), PORCH_TOKEN=other["token"])
     cli("me", PORCH_TOKEN=user_token, fail=True)
+    cli("core-cache", **core_env, fail=True)
+    with sqlite3.connect(cache_path) as cache:
+        assert cache.execute("SELECT count(*) FROM conversations").fetchone()[0] == 0
+        assert cache.execute("SELECT count(*) FROM outbox").fetchone()[0] == 0
     cli("logout-all", PORCH_TOKEN=other["token"])
     cli("me", PORCH_TOKEN=other["token"], fail=True)
     assert cli("invites", PORCH_TOKEN=admin_token)[0]["uses"] == 1
@@ -142,7 +164,8 @@ try:
     cli("register", PORCH_USERNAME="smoke_denied", PORCH_PASSWORD=password, PORCH_INVITE=invite["code"], fail=True)
     cli("logout", PORCH_TOKEN=admin_token)
     cli("me", PORCH_TOKEN=admin_token, fail=True)
-    print("CLI identity + community + messaging smoke passed, bootstrap/register/login/invites/session revocation/logout proven over HTTP")
+    print("CLI identity + community + messaging + shared-core smoke passed, bootstrap/register/login/invites/session revocation/logout proven over HTTP")
 finally:
     server.terminate()
     server.communicate(timeout=10)
+    cache_dir.cleanup()

@@ -83,6 +83,9 @@ fn run() -> Result<()> {
     {
         return Err("HTTPS required except for loopback development".into());
     }
+    if command.starts_with("core-") {
+        return tokio::runtime::Runtime::new()?.block_on(core_command(command, &args, &base));
+    }
     let cli = Cli {
         client: Client::builder()
             .timeout(Duration::from_secs(15))
@@ -364,4 +367,81 @@ fn gateway(base: &str) -> Result<()> {
             }
         }
     })
+}
+
+async fn core_command(command: &str, args: &[String], base: &str) -> Result<()> {
+    let engine =
+        porch_core::Engine::open(base, env::var("PORCH_TOKEN")?, env::var("PORCH_CACHE")?).await?;
+    match command {
+        "core-sync" => {
+            engine.reconcile().await?;
+            print_json(
+                &serde_json::json!({"heads":engine.cache().heads().await?,"communities":engine.cache().communities().await?}),
+            )?;
+        }
+        "core-cache" => print_json(
+            &serde_json::json!({"heads":engine.cache().heads().await?,"communities":engine.cache().communities().await?,"pending":engine.cache().pending().await?,"removal_notice":engine.cache().removal_notice().await?}),
+        )?,
+        "core-messages" => print_json(
+            &engine
+                .cache()
+                .messages(
+                    args.get(1).ok_or("conversation ID required")?.parse()?,
+                    None,
+                    100,
+                )
+                .await?,
+        )?,
+        "core-queue" => {
+            let body: SendMessage = serde_json::from_str(&env::var("PORCH_MESSAGE")?)?;
+            print_json(
+                &engine
+                    .queue(
+                        args.get(1).ok_or("conversation ID required")?.parse()?,
+                        body.content,
+                        body.reply_to,
+                        body.mentions,
+                        body.mention_everyone,
+                    )
+                    .await?,
+            )?;
+        }
+        "core-flush" => print_json(&serde_json::json!({"sent":engine.flush().await?}))?,
+        "core-retry" => {
+            engine.retry(args.get(1).ok_or("nonce required")?).await?;
+            println!("ok");
+        }
+        "core-discard" => {
+            engine.discard(args.get(1).ok_or("nonce required")?).await?;
+            println!("ok");
+        }
+        "core-logout" => {
+            engine.logout().await?;
+            print_json(
+                &serde_json::json!({"signed_out":true,"discarded_sends":engine.discarded_sends()}),
+            )?;
+        }
+        "core-watch" => {
+            let seconds: u64 = env::var("PORCH_WATCH_SECONDS")
+                .unwrap_or_else(|_| "30".into())
+                .parse()?;
+            if !(1..=3600).contains(&seconds) {
+                return Err("watch duration must be 1..3600 seconds".into());
+            }
+            let worker = engine.start_gateway()?;
+            let mut state = worker.state();
+            let deadline = tokio::time::sleep(Duration::from_secs(seconds));
+            tokio::pin!(deadline);
+            let mut states = vec![format!("{:?}", *state.borrow())];
+            loop {
+                tokio::select! {_= &mut deadline=>break,change=state.changed()=>{if change.is_err(){break}states.push(format!("{:?}",*state.borrow()));}}
+            }
+            worker.stop().await;
+            print_json(
+                &serde_json::json!({"states":states,"heads":engine.cache().heads().await?,"pending":engine.cache().pending().await?,"removal_notice":engine.cache().removal_notice().await?}),
+            )?;
+        }
+        _ => return Err("unknown core command".into()),
+    }
+    Ok(())
 }

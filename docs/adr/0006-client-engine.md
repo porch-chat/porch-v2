@@ -62,3 +62,15 @@ Outbox is bounded at 500 sends; cache history is disk-backed and currently has n
 retention/eviction policy. Add one before sustained deployment. Access revocation
 cascades through conversation/message/outbox rows. File deletion is not secure
 erasure of SQLite pages, WALs, storage snapshots or backups.
+
+Purging on 401 also covers ordinary 30-day token expiry, not just revocation.
+The token is opaque and /auth/me has no expiry timestamp, so no local clock-based
+expiry check is claimed. Enqueue is deliberately possible offline on last-known
+authorization. Sign-out errors expose the number of removed local sends, not a
+claim that they were never delivered: a POST may have committed before a lost
+ack. The latest nonempty purge notice (conversation IDs, nonces, timestamp, explicit
+unknown-delivery flag; no content) persists atomically with cache removal and can
+be acknowledged by the consumer. Empty repeat purges do not erase this notice.
+The engine counter is cumulative within that Engine instance, not across logins.
+A future re-login UX must surface the durable notice instead of inviting blind
+resends. It must not describe unknown-outcome sends as certainly undelivered.

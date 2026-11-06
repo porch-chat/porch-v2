@@ -40,7 +40,7 @@ Before every push, safely commit local work then pull --rebase to preserve brand
 
 Phase 4 implementation commits 7fa6b31 (shared messaging/sync contracts) and
 4aad12a (Postgres persistence, authorized HTTP, DM lifecycle, isolated integration).
-CLI proof and docs follow. Local fmt/clippy/build/workspace tests passed, 25 default
+CLI proof and docs are commit fc76564. Local fmt/clippy/build/workspace tests passed, 25 default
 tests and 6 ignored integration/load tests, including 256 sanitizer property cases
 and 5 permission properties with 512 cases each. Actual CLI identity+community+
 messaging HTTP smoke passed. A 20k synthetic-row FTS warm serial benchmark measured
@@ -48,10 +48,21 @@ messaging HTTP smoke passed. A 20k synthetic-row FTS warm serial benchmark measu
 not production/concurrent capacity. Local build cache exhausted disk; only this
 repo's generated target was cleaned, then all tests rebuilt without debuginfo.
 
-Phase 4 hosted CI is pending. No Phase 5 implementation begins until it is green.
+Phase 4 hosted CI passed at fc76564, 107s workflow / 104s job with an existing
+cache and new dependencies. Run https://github.com/porch-chat/porch-v2/actions/runs/42177860647
+Phase 5 starts after this green gate.
 See docs/messaging.md and ADR-0005 for bounds, tombstone/sanitizer semantics,
 revision paging and known boundaries. No outbox/cross-node guarantees, no E2EE,
 no group consent/blocking, no real-user or deployment acceptance yet. Phase 2
 presence/typing remains platform-level (no channel/content identifiers); scoped
 conversation typing is not a Phase 4 claim. No UI, deployment or infrastructure
 changes were made.
+
+Phase 5 shared client engine is implemented in 4f3b14b. Account-bound SQLite,
+durable optimistic outbox, authorized revision sync, offline profile restore,
+reconnect/resume with ephemeral sequence gaps, heartbeat isolation and revocation
+purges have local unit/property/fault-injection/real-Postgres coverage. CLI core
+commands and actual multi-process smoke are being finalized. No UI started;
+Phase 6 must wait for green hosted CI. ADR-0006 and client-engine.md document
+last-known offline authorization, plain-text cache, no eviction, initial full-delta
+bootstrapping, and deliberate 401 draft-loss boundary.

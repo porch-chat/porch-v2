@@ -439,6 +439,7 @@ async fn postgres_client_engine() {
         .unwrap();
     assert!(offline.reconcile().await.unwrap_err().unauthorized());
     assert!(offline.is_signed_out());
+    assert_eq!(offline.discarded_sends(), 1);
     assert!(offline.cache().heads().await.unwrap().is_empty());
     assert!(offline.cache().pending().await.unwrap().is_empty());
     server.abort();

@@ -5,7 +5,7 @@ use std::{
     path::Path,
     sync::{
         Arc,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     },
 };
 use tokio::sync::Mutex;
@@ -21,6 +21,7 @@ pub(crate) struct Inner {
     pub gate: Mutex<()>,
     pub signed_out: AtomicBool,
     pub gateway_active: AtomicBool,
+    pub discarded_sends: AtomicUsize,
 }
 impl Engine {
     pub async fn open(origin: &str, token: String, path: impl AsRef<Path>) -> Result<Self> {
@@ -33,10 +34,13 @@ impl Engine {
             }
             Err(e) if e.retryable() => Cache::restore(&path, api.origin()).await?,
             Err(e) => {
-                if e.unauthorized()
-                    && let Ok((cache, _)) = Cache::restore(&path, api.origin()).await
-                {
-                    cache.clear().await?;
+                if e.unauthorized() {
+                    let mut discarded_sends = 0;
+                    if let Ok((cache, _)) = Cache::restore(&path, api.origin()).await {
+                        discarded_sends = cache.pending().await?.len();
+                        cache.clear().await?;
+                    }
+                    return Err(Error::SignedOut { discarded_sends });
                 }
                 return Err(e);
             }
@@ -49,6 +53,7 @@ impl Engine {
                 gate: Mutex::new(()),
                 signed_out: AtomicBool::new(false),
                 gateway_active: AtomicBool::new(false),
+                discarded_sends: AtomicUsize::new(0),
             }),
         })
     }
@@ -64,30 +69,45 @@ impl Engine {
     pub fn is_signed_out(&self) -> bool {
         self.inner.signed_out.load(Ordering::SeqCst)
     }
+    /// Number of durable queued/failed sends purged by sign-out. Never includes content.
+    pub fn discarded_sends(&self) -> usize {
+        self.inner.discarded_sends.load(Ordering::SeqCst)
+    }
+    async fn expire_locked(&self) -> Result<()> {
+        self.inner.signed_out.store(true, Ordering::SeqCst);
+        let discarded = self.inner.cache.pending().await?.len();
+        self.inner
+            .discarded_sends
+            .fetch_add(discarded, Ordering::SeqCst);
+        self.inner.cache.clear().await
+    }
     fn active(&self) -> Result<()> {
         if self.is_signed_out() {
-            Err(Error::SignedOut)
+            Err(Error::SignedOut {
+                discarded_sends: self.discarded_sends(),
+            })
         } else {
             Ok(())
         }
     }
     async fn checked<T>(&self, result: Result<T>) -> Result<T> {
         if result.as_ref().err().is_some_and(Error::unauthorized) {
-            self.inner.signed_out.store(true, Ordering::SeqCst);
-            self.inner.cache.clear().await?;
+            self.expire_locked().await?;
+            return Err(Error::SignedOut {
+                discarded_sends: self.discarded_sends(),
+            });
         }
         result
     }
     pub(crate) async fn expire(&self) -> Result<()> {
         let _lock = self.inner.gate.lock().await;
-        self.inner.signed_out.store(true, Ordering::SeqCst);
-        self.inner.cache.clear().await
+        self.expire_locked().await
     }
     pub async fn logout(&self) -> Result<()> {
         let _lock = self.inner.gate.lock().await;
         self.inner.signed_out.store(true, Ordering::SeqCst);
         let result = self.inner.api.post_empty("/auth/logout", &()).await;
-        self.inner.cache.clear().await?;
+        self.expire_locked().await?;
         result
     }
     pub async fn reconcile(&self) -> Result<()> {
@@ -98,8 +118,7 @@ impl Engine {
     async fn reconcile_locked(&self) -> Result<()> {
         let user: User = self.inner.api.get("/auth/me").await?;
         if user.id != self.inner.user.id {
-            self.inner.signed_out.store(true, Ordering::SeqCst);
-            self.inner.cache.clear().await?;
+            self.expire_locked().await?;
             return Err(Error::AccountMismatch);
         }
         let heads: Vec<ConversationHead> = self.inner.api.get("/conversations").await?;
