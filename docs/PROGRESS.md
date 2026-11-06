@@ -66,3 +66,33 @@ commands and actual multi-process smoke are being finalized. No UI started;
 Phase 6 must wait for green hosted CI. ADR-0006 and client-engine.md document
 last-known offline authorization, plain-text cache, no eviction, initial full-delta
 bootstrapping, and deliberate 401 draft-loss boundary.
+
+Phase 5 completed with 4f3b14b and bc8f6c4. Local fmt/clippy/build passed,
+33 default tests and all 7 ignored real-Postgres/integration/load tests passed,
+including actual multi-process CLI cache/queue/flush/watch/401 smoke. Hosted CI
+https://github.com/porch-chat/porch-v2/actions/runs/42179324870 passed, 144s workflow /
+141s job, existing restored cache with new dependencies (not controlled warm vs cold).
+Forced sign-out purges plaintext drafts by design and records a durable nonce-only
+removal notice, never a false promise that remote delivery did not happen. No
+refresh-token API (30-day opaque sessions), E2EE, OS credential store or UI claim.
+
+Phase 6 begins after that green gate. Read frontend-design and brand guidance.
+Native GPUI desktop, familiar community/channel/message/member layout, original
+Evening Threshold styling. Windows compile/artifact evidence is distinct from
+runtime/IME/DPI acceptance, which remains Dylan's. No PC access or deployment.
+
+Phase 6 native GPUI client implementation is locally green. Original brand assets
+are embedded, real porch-core powers login/register, communities/channels, DMs,
+history, durable send/retry/discard, reply/edit/reactions and display settings.
+Per-conversation in-memory drafts and explicit send/edit acknowledgements avoid
+clearing unsaved text on failures. Secret values never enter UI snapshots or
+preferences. Details and known v1 limits are in desktop.md and ADR-0007.
+Local fmt/clippy/build, 36 default tests, all 8 ignored Postgres/integration/load
+tests and actual multiprocess CLI smoke passed. Session bridge has actual HTTP/WS
+and Postgres tests, no fake chat data. Linux native startup with Xvfb/Mesa and a
+real loopback backend exited cleanly, but captured frames are entirely black, so
+no usable screenshot or graphical acceptance is claimed. System fallback fonts
+are a native prerequisite in addition to the embedded application font.
+Hosted Linux + Windows build/artifact CI is pending. Windows compilation,
+real Windows/Linux graphical/IME/DPI acceptance and runtime hardware testing are
+separate gates. No PC, deployments, DNS, Caddy or infrastructure were touched.

@@ -1,0 +1,27 @@
+[package]
+name = "porch-desktop"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+porch-core.workspace = true
+porch-protocol.workspace = true
+gpui = "=0.2.2"
+gpui-component = "=0.5.1"
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10"
+async-channel = "2"
+# GPUI's published async-tar/xattr 0.2 requires Linux ENOATTR removed in libc0.2.190.
+# Remove this compatibility pin when the published upstream dependency is fixed.
+[target.'cfg(unix)'.dependencies]
+libc = "=0.2.189"
+
+[dev-dependencies]
+axum.workspace = true
+porch-server = { path = "../porch-server" }
+sqlx.workspace = true
+rand = "0.8"
+tempfile = "3"

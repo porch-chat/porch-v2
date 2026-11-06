@@ -31,6 +31,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install pinned Rust toolchain
         run: rustup show active-toolchain
+      - name: Install Linux desktop libraries
+        run: sudo apt-get update && sudo apt-get install -y libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb1-dev libasound2-dev libfontconfig1-dev libssl-dev libvulkan1 fonts-dejavu-core
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
         with:
@@ -43,3 +45,28 @@ jobs:
       - run: cargo test --workspace --locked --doc
       - run: cargo build --workspace --locked
       - run: python3 scripts/identity-smoke.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: porch-linux-x86_64-debug
+          path: |
+            target/debug/porch-desktop
+            assets/brand/fonts/OFL-Manrope.txt
+          retention-days: 7
+  windows-desktop:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Rust toolchain
+        run: rustup show active-toolchain
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy -p porch-desktop --all-targets --locked -- -D warnings
+      - run: cargo test -p porch-desktop --locked
+      - run: cargo build -p porch-desktop --locked
+      - uses: actions/upload-artifact@v4
+        with:
+          name: porch-windows-x86_64-debug
+          path: |
+            target/debug/porch-desktop.exe
+            assets/brand/fonts/OFL-Manrope.txt
+          retention-days: 7

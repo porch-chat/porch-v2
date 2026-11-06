@@ -1,0 +1,10 @@
+[build]
+jobs = 2
+# Native GPUI has a large dependency graph. Avoid multi-GB DWARF/incremental caches
+# in development and hosted CI; release artifacts remain separate.
+[profile.dev]
+debug = 0
+incremental = false
+[profile.test]
+debug = 0
+incremental = false
