@@ -655,6 +655,11 @@ impl Community {
                 if self.channels.len() >= 512 || (synced && category_id.is_none()) {
                     return invalid();
                 }
+                if let Some(cat) = category_id.filter(|_| synced) {
+                    for o in &self.category(cat)?.overwrites {
+                        self.grant(actor, o.allow)?;
+                    }
+                }
                 let id = self.allocate();
                 self.channels.push(Channel {
                     id,

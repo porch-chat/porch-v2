@@ -93,9 +93,17 @@ mod tests {
             .fetch_one(&pool)
             .await
             .unwrap();
-        assert_eq!(count, 2);
+        assert_eq!(
+            count as usize,
+            MIGRATOR
+                .iter()
+                .filter(|m| m.migration_type.is_up_migration())
+                .count()
+        );
         pool.close().await;
     }
 }
 
 pub mod permissions;
+
+pub mod communities;

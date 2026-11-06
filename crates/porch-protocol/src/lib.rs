@@ -143,6 +143,9 @@ pub struct PresenceEntry {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum GatewayEvent {
+    /// Payload-free invalidation. Refetch communities and filtered snapshots.
+    /// Safe to replay even after membership/permission revocation.
+    SyncRequired,
     Presence {
         entry: PresenceEntry,
     },

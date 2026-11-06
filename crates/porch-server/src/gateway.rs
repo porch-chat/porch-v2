@@ -443,6 +443,40 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn community_revocation_replay_contains_only_safe_invalidations() {
+        let g = gateway().await;
+        let (mut cursor, _) = ready(g.attach(1, 11, None).unwrap());
+        g.attach(2, 22, None).unwrap();
+        cursor.sequence = g.inner.lock().unwrap().streams[&11].sequence;
+        g.detach(11);
+        // A privileged edit, then loss of privilege/membership while offline.
+        // Community events contain no historical resources to leak on resume.
+        g.publish(&[1], GatewayEvent::SyncRequired);
+        g.publish(&[1], GatewayEvent::SyncRequired);
+        assert!(ready(g.attach(1, 11, Some(cursor.clone())).unwrap()).1);
+        let hub = g.inner.lock().unwrap();
+        let events: Vec<_> = hub.streams[&11]
+            .pending
+            .iter()
+            .filter(|e| matches!(e.event, GatewayEvent::SyncRequired))
+            .collect();
+        assert_eq!(events.len(), 2);
+        for event in events {
+            assert!(event.sequence > cursor.sequence);
+            assert_eq!(
+                serde_json::to_value(&event.event).unwrap(),
+                serde_json::json!({"type":"sync_required"})
+            );
+        }
+        assert!(
+            !hub.streams[&22]
+                .replay
+                .iter()
+                .any(|e| matches!(e.event, GatewayEvent::SyncRequired))
+        );
+    }
+
+    #[tokio::test]
     async fn fresh_sync_for_invalid_cursors_and_bounded_slow_consumers() {
         let g = gateway().await;
         let (mut cursor, _) = ready(g.attach(1, 11, None).unwrap());

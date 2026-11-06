@@ -19,6 +19,7 @@ use tokio::sync::Semaphore;
 #[derive(Clone)]
 pub struct IdentityState {
     pool: PgPool,
+    events: Arc<Mutex<Option<std::sync::Weak<dyn crate::gateway::EventBus>>>>,
     limiter: Arc<Mutex<(Instant, u32)>>,
     hashing: Arc<Semaphore>,
     dummy_hash: Arc<String>,
@@ -28,10 +29,27 @@ impl IdentityState {
     pub async fn new(pool: PgPool) -> Result<Self, ApiError> {
         Ok(Self {
             pool,
+            events: Arc::new(Mutex::new(None)),
             limiter: Arc::new(Mutex::new((Instant::now(), 0))),
             hashing: Arc::new(Semaphore::new(4)),
             dummy_hash: Arc::new(hash_password(random_secret()).await?),
         })
+    }
+
+    pub fn set_event_bus(&self, bus: &Arc<dyn crate::gateway::EventBus>) {
+        *self.events.lock().unwrap() = Some(Arc::downgrade(bus));
+    }
+
+    fn publish_sync(&self, audience: &[i64]) {
+        let bus = self
+            .events
+            .lock()
+            .unwrap()
+            .as_ref()
+            .and_then(std::sync::Weak::upgrade);
+        if let Some(bus) = bus {
+            bus.publish(audience, GatewayEvent::SyncRequired);
+        }
     }
 
     fn throttle(&self) -> Result<(), ApiError> {
@@ -139,13 +157,13 @@ pub fn routes(state: IdentityState) -> Router {
         .with_state(state)
 }
 
-fn random_secret() -> String {
+pub(crate) fn random_secret() -> String {
     let mut bytes = [0u8; 32];
     OsRng.fill_bytes(&mut bytes);
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-fn digest(secret: &str) -> String {
+pub(crate) fn digest(secret: &str) -> String {
     format!("{:x}", Sha256::digest(secret.as_bytes()))
 }
 
@@ -234,8 +252,10 @@ async fn register(
     let u = user(&row);
     sqlx::query("INSERT INTO identities(user_id,provider,subject,password_hash) VALUES($1,'password',$2,$3)")
         .bind(u.id).bind(username).bind(hash).execute(&mut *tx).await?;
+    let audience = crate::communities::seed_official(&mut tx).await?;
     let response = new_session(&mut tx, u).await?;
     tx.commit().await?;
+    state.publish_sync(&audience);
     Ok((StatusCode::CREATED, Json(response)))
 }
 
@@ -433,6 +453,7 @@ pub async fn bootstrap(
     let u = user(&row);
     sqlx::query("INSERT INTO identities(user_id,provider,subject,password_hash) VALUES($1,'password',$2,$3)")
         .bind(u.id).bind(username).bind(hash).execute(&mut *tx).await?;
+    crate::communities::seed_official(&mut tx).await?;
     tx.commit().await?;
     Ok(u)
 }

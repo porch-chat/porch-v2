@@ -30,13 +30,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let state = porch_server::identity::IdentityState::new(pool.clone())
         .await
         .map_err(|e| format!("identity initialization failed: {:?}", e.0))?;
+    porch_server::communities::initialize(&pool)
+        .await
+        .map_err(|e| format!("community initialization failed: {:?}", e.0))?;
+    let gateway = porch_server::gateway::Gateway::new(state.clone());
+    let bus: std::sync::Arc<dyn porch_server::gateway::EventBus> =
+        std::sync::Arc::new(gateway.clone());
+    state.set_event_bus(&bus);
+    let communities =
+        porch_server::communities::CommunityService::new(pool.clone(), state.clone(), bus);
     let listener = tokio::net::TcpListener::bind(config.bind).await?;
     tracing::info!(address = %listener.local_addr()?, "Porch listening");
     axum::serve(
         listener,
         router()
             .merge(porch_server::identity::routes(state.clone()))
-            .merge(porch_server::gateway::Gateway::new(state).routes()),
+            .merge(gateway.routes())
+            .merge(communities.routes()),
     )
     .with_graceful_shutdown(async {
         if let Err(error) = tokio::signal::ctrl_c().await {
