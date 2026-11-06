@@ -146,6 +146,8 @@ pub enum GatewayEvent {
     /// Payload-free invalidation. Refetch communities and filtered snapshots.
     /// Safe to replay even after membership/permission revocation.
     SyncRequired,
+    /// Payload-free voice invalidation; refetch an authorized snapshot.
+    VoiceChanged,
     Presence {
         entry: PresenceEntry,
     },
@@ -195,3 +197,6 @@ pub use messaging::*;
 
 pub mod files;
 pub use files::*;
+
+pub mod voice;
+pub use voice::*;

@@ -1,0 +1,60 @@
+name: porch-v2-phase8
+x-common: &common
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: {max-size: 10m, max-file: '3'}
+services:
+  postgres:
+    <<: *common
+    image: ${POSTGRES_IMAGE:?pin digest}
+    environment:
+      POSTGRES_USER: porch
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: porch
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    mem_limit: 1g
+    cpus: 1
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U porch -d porch]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+  livekit:
+    <<: *common
+    image: ${LIVEKIT_IMAGE:?pin digest}
+    command: [--config, /etc/livekit.yaml]
+    volumes: [./livekit.yaml:/etc/livekit.yaml:ro]
+    ports:
+      - 127.0.0.1:39780:7880
+      - 39781:39781/tcp
+      - 39782:39782/udp
+    mem_limit: 1g
+    cpus: 2
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+  server:
+    <<: *common
+    image: ${PORCH_IMAGE:?immutable build tag}
+    environment:
+      DATABASE_URL: postgres://porch:${POSTGRES_PASSWORD}@postgres:5432/porch
+      PORCH_BIND: 0.0.0.0:38147
+      PORCH_STORAGE_ROOT: /objects
+      PORCH_VOICE_URL: ${PORCH_VOICE_URL:-ws://127.0.0.1:39780}
+      PORCH_VOICE_INTERNAL_URL: http://livekit:7880
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:?required}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?required}
+      RUST_LOG: info
+    depends_on:
+      postgres: {condition: service_healthy}
+      livekit: {condition: service_started}
+    ports: [127.0.0.1:38147:38147]
+    volumes: [./objects:/objects]
+    init: true
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    mem_limit: 1g
+    cpus: 2
+volumes:
+  postgres_data:

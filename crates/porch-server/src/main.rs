@@ -40,7 +40,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let communities =
         porch_server::communities::CommunityService::new(pool.clone(), state.clone(), bus.clone());
     let messaging =
-        porch_server::messaging::MessagingService::new(pool.clone(), state.clone(), bus);
+        porch_server::messaging::MessagingService::new(pool.clone(), state.clone(), bus.clone());
     let files = match std::env::var_os("PORCH_STORAGE_ROOT") {
         Some(root) => Some(porch_server::files::FileService::new(
             pool.clone(),
@@ -71,6 +71,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     if std::env::var("PORCH_EMBEDS").as_deref() == Ok("1") {
         app = app
             .merge(porch_server::embeds::EmbedService::new(pool.clone(), state.clone()).routes());
+    }
+    if let Ok(public_url) = std::env::var("PORCH_VOICE_URL") {
+        let provider = porch_server::voice::LiveKitProvider::new(
+            public_url,
+            std::env::var("PORCH_VOICE_INTERNAL_URL")?,
+            std::env::var("LIVEKIT_API_KEY")?,
+            std::env::var("LIVEKIT_API_SECRET")?,
+        )
+        .map_err(|_| "invalid voice configuration")?;
+        let voice = porch_server::voice::VoiceService::new(
+            pool.clone(),
+            state.clone(),
+            bus,
+            std::sync::Arc::new(provider),
+        );
+        voice
+            .sweep()
+            .await
+            .map_err(|_| "initial voice cleanup failed")?;
+        app = app.merge(voice.clone().routes());
+        tokio::spawn(async move {
+            let mut timer = tokio::time::interval(std::time::Duration::from_secs(5));
+            loop {
+                timer.tick().await;
+                if voice.sweep().await.is_err() {
+                    tracing::warn!("voice cleanup failed; retrying");
+                }
+            }
+        });
     }
     let listener = tokio::net::TcpListener::bind(config.bind).await?;
     tracing::info!(address = %listener.local_addr()?, "Porch listening");

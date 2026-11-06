@@ -210,7 +210,7 @@ async fn session(
                             let c=cursor.as_mut().ok_or(Error::InvalidData)?;
                             if !ready||envelope.version!=PROTOCOL_VERSION||envelope.sequence<=c.sequence{return Err(Error::InvalidData)}
                             c.sequence=envelope.sequence;
-                            if matches!(envelope.event,GatewayEvent::SyncRequired){attempt_wake(wake)}
+                            if matches!(envelope.event,GatewayEvent::SyncRequired | GatewayEvent::VoiceChanged){attempt_wake(wake)}
                         },
                         GatewayServer::HeartbeatAck{nonce:ack}=>{if ack==nonce{last_ack=Instant::now()}},
                         GatewayServer::Error{code:ErrorCode::Unauthorized|ErrorCode::Forbidden}=>return Err(Error::Http(401,None)),

@@ -205,3 +205,15 @@ checks. The 1 GiB proof is streaming storage, not full HTTP/UI. No deployment,
 PC access or infrastructure changes occurred. Phase 8 deployment is not
 authorized. This final record is a docs-only change; hosted CI ignores Markdown
 under docs, so 620bbca is the tested code parent rather than a new CI run.
+
+## Phase 8 control-plane checkpoint (not phase completion)
+
+Porch-owned VoiceProvider seam, LiveKit microphone-only short-lived tickets,
+VIEW_CHANNEL/CONNECT/SPEAK authorization, session-bound leases, no-store snapshots,
+leave/revocation/replayed-ticket SFU inventory cleanup and payload-free gateway
+invalidations implemented. CLI voice-join/snapshot/state/leave added; credentials
+exported only by explicit voice-join stdout. Disposable Postgres voice integration
+passed including authentication, private channel denial, duplicate joins, session
+isolation, deafen normalization, RPC failure retry and session revocation.
+Native media/UI, hosted CI and isolated deployment remain pending. Deployment
+runbook is docs/deploy/phase8.md. No public DNS change authorized or performed.

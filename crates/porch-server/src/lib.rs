@@ -117,3 +117,5 @@ pub mod files;
 pub mod previews;
 
 pub mod embeds;
+
+pub mod voice;

@@ -101,6 +101,7 @@ fn run() -> Result<()> {
         "invite-create" | "message-mutate" | "message-search" | "message-read"
         | "message-embed" => 3,
         "messages" | "message-send" | "message-delta" | "message-pins" | "dm-mutate" => 2,
+        "voice-snapshot" | "voice-join" => 3,
         "community-invite-create" => 4,
         "community-invite-revoke" => 3,
         "community" | "community-create" | "community-mutate" | "community-invites" => 2,
@@ -111,6 +112,54 @@ fn run() -> Result<()> {
         return Err("incorrect number of arguments".into());
     }
     match command {
+        "voice-snapshot" => cli.read::<VoiceSnapshot>(&format!(
+            "/voice/{}/{}",
+            args[1].parse::<i64>()?,
+            args[2].parse::<i64>()?
+        ))?,
+        "voice-join" => {
+            let ticket: VoiceTicket = cli
+                .request(
+                    Method::POST,
+                    "/voice/join",
+                    Some(&VoiceJoin {
+                        channel: VoiceChannel {
+                            community_id: args[1].parse()?,
+                            channel_id: args[2].parse()?,
+                        },
+                    }),
+                    true,
+                )?
+                .json()?;
+            // Explicit credential export, stdout only, never diagnostics or caches.
+            print_json(&ticket)?;
+        }
+        "voice-state" => {
+            let flags: VoiceFlags = serde_json::from_str(&env::var("PORCH_VOICE_FLAGS")?)?;
+            let flags: VoiceFlags = cli
+                .request(
+                    Method::POST,
+                    "/voice/state",
+                    Some(&VoiceUpdate {
+                        lease: env::var("PORCH_VOICE_LEASE")?,
+                        flags,
+                    }),
+                    true,
+                )?
+                .json()?;
+            print_json(&flags)?;
+        }
+        "voice-leave" => {
+            cli.request(
+                Method::POST,
+                "/voice/leave",
+                Some(&VoiceLeave {
+                    lease: env::var("PORCH_VOICE_LEASE")?,
+                }),
+                true,
+            )?;
+            println!("ok");
+        }
         "message-embed" => {
             let conversation: i64 = args[1].parse()?;
             let message: i64 = args[2].parse()?;
