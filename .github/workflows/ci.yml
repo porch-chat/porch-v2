@@ -40,6 +40,8 @@ jobs:
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo nextest run --workspace --locked
+      - name: Bounded trusted FFmpeg fixture diagnostic
+        run: python3 scripts/video-fixture-diagnostic.py
       # Shared disposable database: ignored integration tests run serially.
       - run: cargo nextest run --workspace --locked --run-ignored only --test-threads 1
       - run: cargo test --workspace --locked --doc
