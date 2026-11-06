@@ -113,3 +113,5 @@ pub mod messaging;
 pub mod storage;
 
 pub mod files;
+
+pub mod previews;

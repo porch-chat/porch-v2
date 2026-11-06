@@ -4682,6 +4682,7 @@ dependencies = [
  "argon2",
  "axum",
  "futures-util",
+ "image",
  "infer",
  "porch-protocol",
  "proptest",

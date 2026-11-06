@@ -59,6 +59,7 @@ impl FileService {
             .route("/uploads/{id}/chunks", post(chunk))
             .route("/uploads/{id}/complete", post(complete))
             .route("/attachments/{id}", get(download))
+            .route("/attachments/{id}/preview", get(preview))
             .layer(axum::extract::DefaultBodyLimit::max(4096))
             .layer(axum::middleware::map_response(async |mut r: Response| {
                 r.headers_mut()
@@ -354,6 +355,56 @@ pub(crate) async fn bind_attachments(
             .await?;
     }
     Ok(out)
+}
+async fn preview(
+    State(s): State<FileService>,
+    h: HeaderMap,
+    Path(id): Path<String>,
+) -> Result<Response> {
+    let (u, _) = authenticate(&s.identity, &h).await?;
+    let _permit = s.permit()?;
+    if !valid_key(&id) {
+        return Err(missing());
+    }
+    let mut tx = s.pool.begin().await?;
+    let row = sqlx::query(
+        "SELECT conversation_id,message_id,bytes FROM uploads WHERE id=$1 AND state='attached'",
+    )
+    .bind(&id)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(missing)?;
+    let conversation: i64 = row.get("conversation_id");
+    // Hold the same conversation ordering as send/delete while opening bytes.
+    context(&mut tx, conversation, u.id, true)
+        .await?
+        .require(READ_HISTORY)?;
+    let alive: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM messages WHERE conversation_id=$1 AND id=$2 AND NOT deleted)",
+    )
+    .bind(conversation)
+    .bind(row.get::<i64, _>("message_id"))
+    .fetch_one(&mut *tx)
+    .await?;
+    if !alive {
+        return Err(missing());
+    }
+    let bytes = row.get::<i64, _>("bytes") as u64;
+    if bytes > crate::previews::MAX_PREVIEW_SOURCE {
+        return Err(invalid());
+    }
+    let png = s
+        .disk(move |store| crate::previews::thumbnail(store.open(&id)?))
+        .await?;
+    tx.commit().await?;
+    Ok((
+        [
+            ("content-type", "image/png"),
+            ("content-disposition", "inline; filename=\"preview.png\""),
+        ],
+        png,
+    )
+        .into_response())
 }
 async fn download(
     State(s): State<FileService>,

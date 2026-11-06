@@ -84,3 +84,13 @@ or cross-process local upload scheduling is claimed. queue_attachments supports
 attachment-only durable sends. Ready transfer metadata stays until explicit
 cancel (for unsent objects) or conversation/account purge; a native cleanup UX
 and durable ranged downloads are still pending.
+
+Image previews are now available at authenticated GET /attachments/{id}/preview.
+Only attached, live, readable messages qualify, with identical scope checks to
+original downloads. PNG/JPEG/WebP inputs up to 16 MiB and strict 4096x4096 pixel
+bounds are decoded in bounded blocking work and re-encoded as metadata-free PNG
+at most 480x320. SVG/HTML and other codecs are never rendered. Decoder allocation
+limit 96 MiB is best effort, not an OS memory/CPU sandbox or hard time limit.
+There is no persistent preview cache yet; requesting again repeats bounded work.
+Actual HTTP tests cover authorized raster output, wrong scope, unsent objects
+and deletion denial. Video previews and native display remain pending.

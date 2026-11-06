@@ -187,6 +187,78 @@ async fn postgres_files_lifecycle() {
         .as_i64()
         .unwrap();
     let messages = format!("/conversations/{conversation}/messages");
+    // Safe server re-encoding uses the same live scope as original downloads.
+    let mut png = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::new_rgba8(800, 400)
+        .write_to(&mut png, image::ImageFormat::Png)
+        .unwrap();
+    let png = png.into_inner();
+    let up = ok(
+        &app,
+        "POST",
+        "/uploads",
+        &owner,
+        request(conversation, &png),
+    )
+    .await;
+    let image_id = up["id"].as_str().unwrap();
+    assert_eq!(
+        raw(
+            &app,
+            "POST",
+            &format!("/uploads/{image_id}/chunks?offset=0"),
+            &owner,
+            png,
+            None
+        )
+        .await
+        .0,
+        200
+    );
+    ok(
+        &app,
+        "POST",
+        &format!("/uploads/{image_id}/complete"),
+        &owner,
+        Value::Null,
+    )
+    .await;
+    let image_path = format!("/attachments/{image_id}/preview");
+    assert_eq!(
+        raw(&app, "GET", &image_path, &owner, vec![], None).await.0,
+        404
+    );
+    let image_message = ok(
+        &app,
+        "POST",
+        &messages,
+        &owner,
+        send(image_id, "files_image_00001"),
+    )
+    .await;
+    let (code, headers, bytes) = raw(&app, "GET", &image_path, &peer, vec![], None).await;
+    assert_eq!(code, 200);
+    assert_eq!(headers["content-type"], "image/png");
+    let preview = image::load_from_memory(&bytes).unwrap();
+    assert_eq!((preview.width(), preview.height()), (480, 240));
+    assert_eq!(
+        raw(&app, "GET", &image_path, &stranger, vec![], None)
+            .await
+            .0,
+        404
+    );
+    ok(
+        &app,
+        "POST",
+        &format!("{messages}/{}", image_message["id"].as_i64().unwrap()),
+        &owner,
+        json!({"op":"delete"}),
+    )
+    .await;
+    assert_eq!(
+        raw(&app, "GET", &image_path, &peer, vec![], None).await.0,
+        404
+    );
     let data = b"<html><script>untrusted never inline</script></html>";
     assert_eq!(
         call(&app, "POST", "/uploads", "", request(conversation, data))
