@@ -97,3 +97,5 @@ mod tests {
         pool.close().await;
     }
 }
+
+pub mod permissions;

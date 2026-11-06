@@ -183,3 +183,6 @@ pub enum GatewayServer {
         code: ErrorCode,
     },
 }
+
+pub mod community;
+pub use community::*;
