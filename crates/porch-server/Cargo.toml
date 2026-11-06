@@ -16,6 +16,9 @@ serde_json.workspace = true
 serde.workspace = true
 pulldown-cmark = "0.13.6"
 ammonia = "4.2.4"
+tempfile = "3"
+infer = { version = "0.22", default-features = false }
+tokio-util = { version = "0.7", features = ["io"] }
 
 [dev-dependencies]
 proptest = "1.12"

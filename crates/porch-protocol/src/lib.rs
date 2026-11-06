@@ -192,3 +192,6 @@ pub use community::*;
 
 pub mod messaging;
 pub use messaging::*;
+
+pub mod files;
+pub use files::*;

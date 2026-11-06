@@ -109,3 +109,5 @@ pub mod permissions;
 pub mod communities;
 
 pub mod messaging;
+
+pub mod storage;
