@@ -50,6 +50,19 @@ try:
         raise RuntimeError("server did not become ready")
     admin = cli("login", PORCH_USERNAME="smoke_admin", PORCH_PASSWORD=password)
     admin_token = admin["token"]
+    # Exercise the actual CLI gateway consumer, not just a test-only WS client.
+    listener = subprocess.Popen([cli_bin, "gateway"], env={**env, "PORCH_TOKEN": admin_token},
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        listener.communicate(timeout=1)
+        raise AssertionError("gateway listener exited unexpectedly")
+    except subprocess.TimeoutExpired:
+        listener.kill()
+        output, errors = listener.communicate(timeout=5)
+    events = [json.loads(line) for line in output.splitlines()]
+    assert events[0]["op"] == "hello", errors
+    assert events[1]["op"] == "ready" and not events[1]["resumed"], errors
+    assert any(event["op"] == "heartbeat_ack" for event in events), errors
     assert cli("me", PORCH_TOKEN=admin_token)["admin"]
     invite = cli("invite-create", 2, 3600, PORCH_TOKEN=admin_token)
     user = cli("register", PORCH_USERNAME="smoke_user", PORCH_PASSWORD=password, PORCH_INVITE=invite["code"])

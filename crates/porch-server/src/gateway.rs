@@ -28,6 +28,7 @@ pub struct Gateway {
     identity: IdentityState,
     inner: Arc<Mutex<Hub>>,
     notify: Arc<Notify>,
+    connections: Arc<tokio::sync::Semaphore>,
     pub heartbeat_interval: Duration,
     pub heartbeat_timeout: Duration,
 }
@@ -42,6 +43,7 @@ struct Stream {
     replay: VecDeque<EventEnvelope>,
     pending: VecDeque<EventEnvelope>,
     active: bool,
+    overflow: bool,
     status: PresenceStatus,
     touched: Instant,
 }
@@ -82,7 +84,7 @@ impl Stream {
             self.pending.push_back(envelope);
             // A lagging connection is closed rather than silently losing events.
             if self.pending.len() > REPLAY {
-                self.active = false;
+                self.overflow = true;
                 self.pending.clear();
             }
         }
@@ -138,6 +140,7 @@ impl Gateway {
                 generation: 0,
             })),
             notify: Arc::new(Notify::new()),
+            connections: Arc::new(tokio::sync::Semaphore::new(MAX_SESSIONS)),
             heartbeat_interval: Duration::from_secs(15),
             heartbeat_timeout: Duration::from_secs(45),
         }
@@ -174,6 +177,7 @@ impl Gateway {
                     replay: VecDeque::new(),
                     pending: VecDeque::new(),
                     active: false,
+                    overflow: false,
                     status: PresenceStatus::Online,
                     touched: Instant::now(),
                 },
@@ -193,11 +197,16 @@ impl Gateway {
                 .extend(s.replay.iter().filter(|e| e.sequence > c.sequence).cloned());
         }
         s.active = true;
+        s.overflow = false;
         s.status = PresenceStatus::Online;
         s.touched = Instant::now();
         let cursor = ResumeCursor {
             stream: s.id.clone(),
-            sequence: s.sequence,
+            sequence: if resumed {
+                s.pending.front().map_or(s.sequence, |e| e.sequence - 1)
+            } else {
+                s.sequence
+            },
         };
         hub.changed(user);
         self.notify.notify_waiters();
@@ -225,11 +234,19 @@ async fn upgrade(
     headers: HeaderMap,
     ws: WebSocketUpgrade,
 ) -> Result<Response, ApiError> {
+    let permit = gateway
+        .connections
+        .clone()
+        .try_acquire_owned()
+        .map_err(|_| ApiError(ErrorCode::RateLimited))?;
     let (user, session) = authenticate(&gateway.identity, &headers).await?;
     Ok(ws
         .max_message_size(4096)
         .max_frame_size(4096)
-        .on_upgrade(move |socket| connection(socket, gateway, headers, user.id, session)))
+        .on_upgrade(move |socket| async move {
+            let _permit = permit;
+            connection(socket, gateway, headers, user.id, session).await
+        }))
 }
 async fn send(socket: &mut WebSocket, event: GatewayServer) -> bool {
     let text = serde_json::to_string(&event).unwrap();
@@ -290,6 +307,7 @@ async fn connection(
     let mut typing = Instant::now() - Duration::from_secs(10);
     let mut presence = Instant::now() - Duration::from_secs(10);
     let mut tick = tokio::time::interval(gateway.heartbeat_interval);
+    let mut input_window = (Instant::now(), 0u32);
     loop {
         // Register before draining to avoid lost wakeups.
         let notified = gateway.notify.notified();
@@ -298,7 +316,7 @@ async fn connection(
         let pending = {
             let mut hub = gateway.inner.lock().unwrap();
             let s = hub.streams.get_mut(&session).unwrap();
-            if !s.active {
+            if !s.active || s.overflow {
                 break;
             }
             s.pending.drain(..).collect::<Vec<_>>()
@@ -319,6 +337,9 @@ async fn connection(
                 if heartbeat.elapsed() >= gateway.heartbeat_timeout || authenticate(&gateway.identity,&headers).await.is_err() { break; }
             },
             message = receive(&mut socket) => {
+                if input_window.0.elapsed() >= Duration::from_secs(1) { input_window = (Instant::now(),0); }
+                input_window.1 += 1;
+                if input_window.1 > 60 { break; }
                 match message {
                     Some(GatewayClient::Heartbeat {nonce}) => {
                         heartbeat = Instant::now();
@@ -345,4 +366,143 @@ async fn connection(
     }
     gateway.detach(session);
     let _ = tokio::time::timeout(Duration::from_secs(1), socket.send(Message::Close(None))).await;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    async fn gateway() -> Gateway {
+        Gateway::new(
+            IdentityState::new(
+                sqlx::postgres::PgPoolOptions::new()
+                    .connect_lazy("postgres://localhost/unused")
+                    .unwrap(),
+            )
+            .await
+            .unwrap(),
+        )
+    }
+    fn ready(reply: GatewayServer) -> (ResumeCursor, bool) {
+        match reply {
+            GatewayServer::Ready {
+                cursor, resumed, ..
+            } => (cursor, resumed),
+            _ => panic!("ready"),
+        }
+    }
+
+    #[tokio::test]
+    async fn replay_is_ordered_scoped_and_ephemeral_is_not_replayed() {
+        let g = gateway().await;
+        let (mut cursor, _) = ready(g.attach(1, 11, None).unwrap());
+        g.attach(2, 22, None).unwrap();
+        cursor.sequence = g.inner.lock().unwrap().streams[&11].sequence;
+        g.detach(11);
+        // Disconnect's own offline event and two durable events must all replay.
+        g.publish(
+            &[1],
+            GatewayEvent::Presence {
+                entry: PresenceEntry {
+                    user_id: 9,
+                    status: PresenceStatus::Idle,
+                },
+            },
+        );
+        g.publish(
+            &[1],
+            GatewayEvent::Typing {
+                user_id: 9,
+                expires_in_ms: 5000,
+            },
+        );
+        g.publish(
+            &[1],
+            GatewayEvent::Presence {
+                entry: PresenceEntry {
+                    user_id: 9,
+                    status: PresenceStatus::Dnd,
+                },
+            },
+        );
+        let (_, resumed) = ready(g.attach(1, 11, Some(cursor.clone())).unwrap());
+        assert!(resumed);
+        let hub = g.inner.lock().unwrap();
+        let events: Vec<_> = hub.streams[&11].pending.iter().collect();
+        assert_eq!(events.len(), 4); // offline, idle, dnd, attach presence
+        assert!(events.windows(2).all(|w| w[0].sequence < w[1].sequence));
+        assert!(events.iter().all(
+            |e| e.sequence > cursor.sequence && !matches!(e.event, GatewayEvent::Typing { .. })
+        ));
+        assert!(!hub.streams[&22].replay.iter().any(|e| matches!(
+            e.event,
+            GatewayEvent::Presence {
+                entry: PresenceEntry { user_id: 9, .. }
+            }
+        )));
+    }
+
+    #[tokio::test]
+    async fn fresh_sync_for_invalid_cursors_and_bounded_slow_consumers() {
+        let g = gateway().await;
+        let (mut cursor, _) = ready(g.attach(1, 11, None).unwrap());
+        g.detach(11);
+        cursor.sequence = u64::MAX;
+        assert!(!ready(g.attach(1, 11, Some(cursor.clone())).unwrap()).1);
+        g.detach(11);
+        cursor.sequence = 0;
+        cursor.stream = "previous-process-or-other-session".into();
+        assert!(!ready(g.attach(1, 11, Some(cursor)).unwrap()).1);
+        for _ in 0..300 {
+            g.publish(
+                &[1],
+                GatewayEvent::Presence {
+                    entry: PresenceEntry {
+                        user_id: 1,
+                        status: PresenceStatus::Idle,
+                    },
+                },
+            );
+        }
+        let hub = g.inner.lock().unwrap();
+        let s = &hub.streams[&11];
+        assert!(s.overflow && s.active); // no second attach until old connection cleans up
+        assert!(s.pending.len() <= REPLAY);
+        assert_eq!(s.replay.len(), REPLAY);
+        drop(hub);
+        assert!(matches!(g.attach(1, 11, None), Err(ErrorCode::Conflict)));
+        g.detach(11);
+        assert!(g.attach(1, 11, None).is_ok());
+    }
+
+    #[tokio::test]
+    async fn presence_aggregation_and_offline_cleanup() {
+        let g = gateway().await;
+        g.attach(1, 11, None).unwrap();
+        g.attach(1, 12, None).unwrap();
+        {
+            let mut hub = g.inner.lock().unwrap();
+            hub.streams.get_mut(&11).unwrap().status = PresenceStatus::Idle;
+            assert_eq!(hub.presence()[0].status, PresenceStatus::Online);
+            hub.streams.get_mut(&12).unwrap().status = PresenceStatus::Dnd;
+            assert_eq!(hub.presence()[0].status, PresenceStatus::Dnd);
+        }
+        g.detach(12);
+        assert_eq!(
+            g.inner.lock().unwrap().presence()[0].status,
+            PresenceStatus::Idle
+        );
+        g.detach(11);
+        assert!(g.inner.lock().unwrap().presence().is_empty());
+        let hub = g.inner.lock().unwrap();
+        assert!(matches!(
+            hub.streams[&11].replay.back().unwrap().event,
+            GatewayEvent::Presence {
+                entry: PresenceEntry {
+                    status: PresenceStatus::Offline,
+                    ..
+                }
+            }
+        ));
+    }
 }
