@@ -72,8 +72,8 @@ software-rendered evidence, not real hardware/IME/DPI or Windows runtime accepta
 
 The reproducible Linux smoke is scripts/desktop-smoke.py. Use an empty disposable
 Postgres database and run under a 1440x1000 Xvfb display with Openbox, xdotool and
-ImageMagick installed. It creates fixture messages, authenticates the native
-process, types into the real composer, verifies delivery through the CLI and
-exits. PORCH_SMOKE_SCREENSHOT optionally saves a fixture-only screenshot. CI
+ImageMagick installed. It creates fixture messages, types a fresh fixture username/password through
+the actual native sign-in form, types into the real composer, verifies delivery
+through the CLI and exits. Password entry uses stdin, never process argv. PORCH_SMOKE_SCREENSHOT optionally saves a fixture-only screenshot. CI
 runs it in a separate empty database with Mesa software Vulkan. This smoke
-does not exercise the interactive password form, other devices or real drivers.
+does not exercise other devices or real drivers.

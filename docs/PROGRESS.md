@@ -99,3 +99,13 @@ are a native prerequisite in addition to the embedded application font.
 Hosted Linux + Windows build/artifact CI is pending. Windows compilation,
 real Windows/Linux graphical/IME/DPI acceptance and runtime hardware testing are
 separate gates. No PC, deployments, DNS, Caddy or infrastructure were touched.
+
+Phase 6 follow-up adds a reproducible headless native smoke to hosted Linux CI.
+Xvfb + Openbox + Mesa drives the actual username/password form and composer,
+then verifies delivered text through the real CLI. Fixture credentials use stdin,
+never command-line arguments. A security regression test rejects origin URLs
+containing credentials/query/fragment before saving local preferences, and drops
+invalid legacy preferences on load. Local checks now pass 37 default tests plus
+8 ignored Postgres/integration/load tests. Native smoke passed against a fresh
+empty local database. Initial cross-platform hosted build is still running;
+do not start Phase 7 or claim Windows acceptance before it passes.

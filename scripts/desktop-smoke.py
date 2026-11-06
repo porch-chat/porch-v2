@@ -78,12 +78,22 @@ try:
             PORCH_MESSAGE=json.dumps({"nonce": f"native_smoke_nonce_{i:08}",
                                      "content": {"format": "markdown", "text": text}, "reply_to": None}))
     with tempfile.TemporaryDirectory(prefix="porch-native-smoke-") as data:
-        ui = {**env, "PORCH_DATA_DIR": data, "PORCH_TOKEN": token, "PORCH_SMOKE_SECONDS": "35"}
+        ui = {**env, "PORCH_DATA_DIR": data, "PORCH_SMOKE_SECONDS": "35"}
+        ui.pop("PORCH_TOKEN", None)
         wm = subprocess.Popen(["openbox"], env=ui, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         with tempfile.TemporaryFile() as log:
             desktop = subprocess.Popen([desktop_bin], env=ui, stdout=log, stderr=log)
             subprocess.run(["xdotool", "search", "--sync", "--name", "^Porch$"],
                            env=ui, check=True, timeout=20, stdout=subprocess.DEVNULL)
+            time.sleep(2)
+            for y, value in [(509, env["PORCH_URL"]), (562, "desktop_smoke"), (614, password)]:
+                subprocess.run(["xdotool", "mousemove", "720", str(y), "click", "1", "key", "ctrl+a"],
+                               env=ui, check=True, timeout=10)
+                # Fixture credentials travel through stdin, not process argv.
+                subprocess.run(["xdotool", "type", "--clearmodifiers", "--file", "-"],
+                               input=value, text=True, env=ui, check=True, timeout=10)
+            subprocess.run(["xdotool", "mousemove", "720", "665", "click", "1"],
+                           env=ui, check=True, timeout=10)
 
             def count():
                 paths = list(Path(data).glob("*.sqlite3"))
@@ -116,7 +126,7 @@ try:
                 subprocess.run(["import", "-window", "root", screenshot], env=ui, check=True, timeout=10)
             desktop.wait(timeout=40)
             assert desktop.returncode == 0, "desktop did not exit cleanly"
-    print("Native GPUI startup, authentication, keyboard composer and remote delivery passed.")
+    print("Native GPUI startup, interactive login, keyboard composer and remote delivery passed.")
 finally:
     for process in (desktop, wm, server):
         if process and process.poll() is None:
