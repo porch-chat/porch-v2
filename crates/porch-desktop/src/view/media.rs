@@ -99,10 +99,7 @@ impl Porch {
                 .flex_col()
                 .gap_2()
                 .child(heading(filename.clone()).whitespace_normal())
-                .child(small(format!(
-                    "{} bytes · {}",
-                    attachment.bytes, attachment.mime
-                )));
+                .child(small(file_size(attachment.bytes)));
             let save_id = id.clone();
             let mut controls = div().flex().gap_2().flex_wrap().child(
                 Button::new(SharedString::from(format!("save-{mid}-{id}")))
@@ -309,5 +306,16 @@ impl Porch {
             panel = panel.child(small(saved.clone()));
         }
         panel
+    }
+}
+
+pub(super) fn file_size(bytes: u64) -> String {
+    let b = bytes as f64;
+    if b < 1024. {
+        format!("{bytes} B")
+    } else if b < 1024. * 1024. {
+        format!("{:.1} KB", b / 1024.)
+    } else {
+        format!("{:.1} MB", b / 1024. / 1024.)
     }
 }

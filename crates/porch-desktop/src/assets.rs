@@ -4,6 +4,8 @@ pub struct Assets;
 impl AssetSource for Assets {
     fn load(&self, path: &str) -> anyhow::Result<Option<Cow<'static, [u8]>>> {
         let bytes: Option<&'static [u8]> = match path {
+            "porch/paperclip.svg" => Some(include_bytes!("icons/paperclip.svg")),
+            "porch/search.svg" => Some(include_bytes!("icons/search.svg")),
             "porch/hash.svg" => Some(include_bytes!("icons/hash.svg")),
             "porch/volume.svg" => Some(include_bytes!("icons/volume.svg")),
             "porch/settings.svg" => Some(include_bytes!("icons/settings.svg")),

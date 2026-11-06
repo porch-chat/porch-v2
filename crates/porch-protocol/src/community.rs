@@ -122,6 +122,9 @@ pub struct CommunitySnapshot {
     /// Only returned to members with BAN_MEMBERS.
     pub bans: Vec<i64>,
     pub permissions: u64,
+    /// Display names for listed members, filled by the server when serving a snapshot.
+    #[serde(default)]
+    pub usernames: std::collections::BTreeMap<i64, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

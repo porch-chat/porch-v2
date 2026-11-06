@@ -58,7 +58,13 @@ impl Porch {
             .as_ref()
             .filter(|u| u.id == id)
             .map(|u| u.username.clone())
-            .unwrap_or_else(|| format!("Member {id}"))
+            .or_else(|| {
+                self.snapshot
+                    .communities
+                    .iter()
+                    .find_map(|c| c.usernames.get(&id).cloned())
+            })
+            .unwrap_or_else(|| format!("User {id}"))
     }
     pub(super) fn user_panel(&self, cx: &mut Context<Self>) -> Div {
         let id = self

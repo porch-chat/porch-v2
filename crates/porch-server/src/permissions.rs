@@ -255,6 +255,7 @@ impl Community {
                 vec![]
             },
             permissions: self.base(user),
+            usernames: Default::default(),
         })
     }
     pub fn join(&mut self, user: i64) -> Result<()> {

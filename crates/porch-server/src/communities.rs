@@ -273,7 +273,15 @@ async fn snapshot(
         .fetch_optional(&s.pool)
         .await?
         .ok_or(error(ErrorCode::NotFound))?;
-    Ok(Json(decode(data)?.snapshot(u.id)?))
+    let mut snapshot = decode(data)?.snapshot(u.id)?;
+    let ids: Vec<i64> = snapshot.members.iter().map(|m| m.user_id).collect();
+    let rows: Vec<(i64, String)> =
+        sqlx::query_as("SELECT id,username FROM users WHERE id = ANY($1)")
+            .bind(&ids)
+            .fetch_all(&s.pool)
+            .await?;
+    snapshot.usernames = rows.into_iter().collect();
+    Ok(Json(snapshot))
 }
 async fn mutate(
     State(s): State<CommunityService>,

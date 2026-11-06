@@ -6,6 +6,7 @@ pub struct Settings {
     pub font_size: f32,
     pub members: bool,
     pub origin: String,
+    pub pins: Vec<String>,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -13,6 +14,7 @@ impl Default for Settings {
             font_size: 15.,
             members: true,
             origin: "http://127.0.0.1:8080".into(),
+            pins: Vec::new(),
         }
     }
 }
@@ -59,6 +61,7 @@ mod tests {
             font_size: 100.,
             members: false,
             origin: "https://porch.example".into(),
+            pins: vec!["c:1".into()],
         };
         settings.save(root.path()).unwrap();
         let loaded = Settings::load(root.path());

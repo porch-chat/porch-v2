@@ -29,28 +29,29 @@ with tempfile.TemporaryDirectory(prefix='porch-polish-') as data:
             except OSError: time.sleep(.1)
         admin=cli('login',PORCH_USERNAME='dylan',PORCH_PASSWORD=password)
         env['PORCH_TOKEN']=admin['token']
-        community=cli('community-create','The Evening Porch')['id']
+        community=cli('community-create','Weekend Crew')['id']
         def mutate(**body): return cli('community-mutate',community,PORCH_COMMAND=json.dumps(body))['id']
-        category=mutate(op='create_category',name='Around the porch',position=0)
-        for i,name in enumerate(['general','weekend-plans','photos-and-finds']):
+        category=mutate(op='create_category',name='Text Channels',position=0)
+        for i,name in enumerate(['general','random','dev']):
             mutate(op='create_channel',name=name,kind='text',category_id=category,position=i,synced=True)
-        voicecat=mutate(op='create_category',name='Pull up a chair',position=1)
-        mutate(op='create_channel',name='Front steps',kind='voice',category_id=voicecat,position=0,synced=True)
-        mutate(op='create_channel',name='Game night',kind='voice',category_id=voicecat,position=1,synced=True)
+        voicecat=mutate(op='create_category',name='Voice Channels',position=1)
+        mutate(op='create_channel',name='General',kind='voice',category_id=voicecat,position=0,synced=True)
+        mutate(op='create_channel',name='Gaming',kind='voice',category_id=voicecat,position=1,synced=True)
         invite=cli('invite-create',5,3600)['code']
         join=cli('community-invite-create',community,5,3600)['code']
         tokens=[admin['token']]
-        for name in ['lily','zach','amber']:
+        for name in ['maya','jordan','sam']:
             auth=cli('register',PORCH_USERNAME=name,PORCH_PASSWORD=password,PORCH_INVITE=invite)
             tokens.append(auth['token'])
             cli('community-join',PORCH_TOKEN=auth['token'],PORCH_COMMUNITY_INVITE=join)
         heads=cli('conversations'); head=next(h for h in heads if h.get('community_id')==community and h['name']=='general')
-        lines=[(0,'Made it home. The porch light is officially on.'),(0,'Anyone around for a slow evening?'),(1,'Just put the kettle on. Give me five minutes.'),(2,'I found the perfect spot for game night.'),(2,'No complicated plans. Just us, something warm, and a few games.'),(0,'That sounds like exactly the right amount of planning.'),(1,'Saving a chair for everyone.')]
+        lines=[(0,'Is the build passing on main now?'),(0,'Looks like the Windows job is still running.'),(1,'Yes, it went green about ten minutes ago.'),(2,'Nice. I will write the release notes this afternoon.'),(2,'Draft is in the shared doc if anyone wants to read it first.'),(3,'Reading it now. Section two needs a link to the install steps.'),(0,'Added it, thanks.')]
         for i,(who,text) in enumerate(lines):
             cli('message-send',head['id'],PORCH_TOKEN=tokens[who],PORCH_MESSAGE=json.dumps({'nonce':f'polish_fixture_{i:016}','content':{'format':'markdown','text':text},'reply_to':None}))
-        fixture=Path(data)/'game-night.txt'; fixture.write_text('Tea, warm lights, and one more round.\n')
+        fixture=Path(data)/'release-notes.txt'; fixture.write_text('Release notes draft.\n')
         file=cli('file-upload',head['id'],fixture)
-        cli('message-send',head['id'],PORCH_MESSAGE=json.dumps({'nonce':'polish_attachment_00000001','content':{'format':'markdown','text':'The very serious game-night agenda.'},'attachments':[file['id']],'reply_to':None}))
+        cli('message-send',head['id'],PORCH_MESSAGE=json.dumps({'nonce':'polish_attachment_00000001','content':{'format':'markdown','text':'Latest draft attached.'},'attachments':[file['id']],'reply_to':None}))
+        subprocess.run(['psql','-h','127.0.0.1','-p','35415','-U','porch','-d',os.environ['DATABASE_URL'].rsplit('/',1)[1],'-c',"WITH r AS (SELECT id,row_number() OVER (ORDER BY id) n,date_trunc('minute',now())-interval '6 hours'+(ARRAY[0,1,15,47,49,95,130,131])[row_number() OVER (ORDER BY id)]*interval '1 minute' t FROM messages WHERE conversation_id=%d) UPDATE messages m SET created_at=r.t,data=jsonb_set(m.data,'{created_at}',to_jsonb(r.t::text)) FROM r WHERE m.id=r.id"%head['id']],env={**os.environ,'PGPASSWORD':os.environ.get('PGPASSWORD','')},check=True)
         ui={**env,'PORCH_DATA_DIR':data+'/cache','PORCH_SMOKE_SECONDS':'75','VK_ICD_FILENAMES':'/usr/share/vulkan/icd.d/lvp_icd.json'}
         wm=subprocess.Popen(['openbox'],env=ui,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
         desktop=subprocess.Popen([bin/'porch-desktop'],env=ui,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
@@ -62,7 +63,7 @@ with tempfile.TemporaryDirectory(prefix='porch-polish-') as data:
         subprocess.run(['xdotool','mousemove','720','622','click','1'],env=ui,check=True)
         time.sleep(6)
         # Official community is first, the fixture community second.
-        subprocess.run(['xdotool','mousemove','52','310','click','1'],env=ui,check=True)
+        subprocess.run(['xdotool','mousemove','52','318','click','1'],env=ui,check=True)
         time.sleep(4)
         subprocess.run(['xdotool','mousemove','700','110'],env=ui,check=True)
         time.sleep(2)

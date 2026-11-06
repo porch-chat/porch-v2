@@ -22,21 +22,21 @@ fn main() {
             Theme::change(ThemeMode::Dark, None, cx);
             let theme = Theme::global_mut(cx);
             theme.font_family = "Manrope".into();
-            theme.background = rgb(0x111210).into();
-            theme.foreground = rgb(0xF4E8D7).into();
-            theme.primary = rgb(0xF3B85A).into();
-            theme.primary_foreground = rgb(0x241B0F).into();
-            theme.primary_hover = rgb(0xFFCD7D).into();
-            theme.primary_active = rgb(0xF3B85A).into();
-            theme.secondary = rgb(0x232B24).into();
-            theme.secondary_foreground = rgb(0xF4E8D7).into();
-            theme.muted = rgb(0x232B24).into();
-            theme.muted_foreground = rgb(0xCAC7B9).into();
-            theme.window_border = rgb(0x354136).into();
-            theme.input = rgb(0x596458).into();
-            theme.border = rgb(0x596458).into();
-            theme.caret = rgb(0xF3B85A).into();
-            theme.ring = rgb(0xF3B85A).into();
+            theme.background = rgb(0x14100D).into();
+            theme.foreground = rgb(0xEDE8E4).into();
+            theme.primary = rgb(0xE6731E).into();
+            theme.primary_foreground = rgb(0xFFFFFF).into();
+            theme.primary_hover = rgb(0xF08A3E).into();
+            theme.primary_active = rgb(0xC9631A).into();
+            theme.secondary = rgb(0x1D1713).into();
+            theme.secondary_foreground = rgb(0xEDE8E4).into();
+            theme.muted = rgb(0x1D1713).into();
+            theme.muted_foreground = rgb(0x8D827A).into();
+            theme.window_border = rgb(0x221B16).into();
+            theme.input = rgb(0x2A211B).into();
+            theme.border = rgb(0x2A211B).into();
+            theme.caret = rgb(0xE6731E).into();
+            theme.ring = rgb(0xE6731E).into();
             cx.text_system()
                 .add_fonts(vec![Cow::Borrowed(include_bytes!(
                     "../../../assets/brand/fonts/Manrope.ttf"

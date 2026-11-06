@@ -19,13 +19,16 @@ use std::{
     sync::Arc,
 };
 
-const PAGE: u32 = 0x111210;
-const SURFACE: u32 = 0x191D19;
-const RAISED: u32 = 0x232B24;
-const CREAM: u32 = 0xF4E8D7;
-const MUTED: u32 = 0xCAC7B9;
-const AMBER: u32 = 0xF3B85A;
-const BORDER: u32 = 0x354136;
+const PAGE: u32 = 0x14100D;
+const SURFACE: u32 = 0x120E0B;
+const RAISED: u32 = 0x1D1713;
+const CREAM: u32 = 0xEDE8E4;
+const MUTED: u32 = 0x8D827A;
+const AMBER: u32 = 0xE6731E;
+const BORDER: u32 = 0x221B16;
+const SELECTED: u32 = 0x261E1A;
+const OWN_BUBBLE: u32 = 0x4D2E16;
+const OTHER_BUBBLE: u32 = 0x221912;
 pub struct Porch {
     bridge: Bridge,
     snapshot: Arc<Snapshot>,
@@ -36,7 +39,10 @@ pub struct Porch {
     password: Entity<InputState>,
     invite: Entity<InputState>,
     composer: Entity<InputState>,
-    dm: Entity<InputState>,
+    search: Entity<InputState>,
+    home: bool,
+    people_view: bool,
+    placeholder_for: Option<i64>,
     subscriptions: Vec<Subscription>,
     community: Option<i64>,
     show_settings: bool,
@@ -84,8 +90,8 @@ impl Porch {
                 .placeholder("Message")
                 .auto_grow(1, 6)
         });
-        let dm =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Member IDs, separated by commas"));
+        let search =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Find or start a conversation"));
         let bridge = Bridge::start(root.clone());
         let snapshot = bridge.latest.lock().unwrap().clone();
         let changes = bridge.changes.clone();
@@ -108,6 +114,11 @@ impl Porch {
                     }
                 }),
             ];
+        subscriptions.push(cx.subscribe_in(&search, window, |_, _, event, _, cx| {
+            if matches!(event, InputEvent::Change) {
+                cx.notify();
+            }
+        }));
         subscriptions.push(cx.observe_window_activation(window, |this, window, cx| {
             if !window.is_window_active() && this.snapshot.voice.ptt {
                 this.ptt(false, cx);
@@ -123,7 +134,10 @@ impl Porch {
             password,
             invite,
             composer,
-            dm,
+            search,
+            home: true,
+            people_view: true,
+            placeholder_for: None,
             subscriptions,
             community: None,
             show_settings: false,
@@ -192,7 +206,7 @@ impl Porch {
                     if h.community_id.is_some() {
                         format!("Message #{}", h.name)
                     } else {
-                        format!("Message {}", h.name)
+                        format!("Message {}", self.head_title(h))
                     }
                 })
                 .unwrap_or_else(|| "Message".into());
@@ -336,115 +350,262 @@ impl Porch {
                 .when(self.register,|d|d.child(Input::new(&self.invite)))
                 .child(Button::new("login").primary().label(if self.register{"Create account"}else{"Sign in"}).loading(self.snapshot.busy).on_click(cx.listener(|this,_,window,cx|this.login(window,cx))))
                 .child(Button::new("register").ghost().label(if self.register{"I already have an account"}else{"Have a platform invitation?"}).on_click(cx.listener(|this,_,_,cx|{this.register= !this.register;cx.notify()})))
-                .child(small("Your password and session are not saved on this device."))
                 .when(self.snapshot.notice.is_some(),|d|d.child(small("Local drafts were removed when your previous session ended. Some may already have been delivered. Sign in to inspect the notice."))))
     }
-    fn rail(&self, cx: &mut Context<Self>) -> Div {
-        div()
-            .w(px(76.))
-            .flex_shrink_0()
-            .h_full()
-            .py_4()
-            .px_3()
-            .bg(rgb(PAGE))
-            .flex()
-            .flex_col()
-            .gap_3()
-            .child(self.logo())
-            .child(
-                Button::new("home")
-                    .icon(icon("inbox"))
-                    .ghost()
-                    .size(px(46.))
-                    .tooltip("Direct messages")
-                    .selected(self.community.is_none())
-                    .disabled(self.awaiting.is_some() || self.editing.is_some())
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.community = None;
-                        if let Some(head) = this
-                            .snapshot
-                            .heads
-                            .iter()
-                            .find(|h| h.community_id.is_none())
-                        {
-                            this.command(Command::Select(head.id), cx);
-                        }
-                        cx.notify()
-                    })),
-            )
-            .child(div().h(px(1.)).bg(rgb(BORDER)).my_1())
-            .children(self.snapshot.communities.iter().map(|c| {
-                let id = c.community.id;
-                let name = c.community.name.clone();
-                let initials: String = name
-                    .split_whitespace()
-                    .take(2)
-                    .filter_map(|s| s.chars().next())
-                    .collect();
+    fn pinned(&self, key: &str) -> bool {
+        self.settings.pins.iter().any(|p| p == key)
+    }
+    fn toggle_pin(&mut self, key: String, cx: &mut Context<Self>) {
+        if let Some(i) = self.settings.pins.iter().position(|p| *p == key) {
+            self.settings.pins.remove(i);
+        } else {
+            self.settings.pins.push(key);
+        }
+        self.persist(cx);
+        cx.notify();
+    }
+    fn open_community(&mut self, id: i64, cx: &mut Context<Self>) {
+        self.home = false;
+        self.community = Some(id);
+        if let Some(head) = self
+            .snapshot
+            .heads
+            .iter()
+            .find(|h| h.community_id == Some(id))
+        {
+            self.command(Command::Select(head.id), cx);
+        }
+        cx.notify();
+    }
+    fn open_person(&mut self, id: i64, cx: &mut Context<Self>) {
+        self.home = true;
+        self.people_view = false;
+        self.community = None;
+        let me = self
+            .snapshot
+            .user
+            .as_ref()
+            .map(|u| u.id)
+            .unwrap_or_default();
+        let existing = self.snapshot.heads.iter().find(|h| {
+            h.community_id.is_none()
+                && h.participants.contains(&id)
+                && h.participants.iter().all(|p| *p == id || *p == me)
+        });
+        match existing {
+            Some(head) => {
+                let hid = head.id;
+                self.command(Command::Select(hid), cx);
+            }
+            None => {
+                self.command(Command::CreateDm(vec![id]), cx);
+            }
+        }
+        cx.notify();
+    }
+    fn people(&self) -> Vec<(i64, String, Vec<String>)> {
+        let me = self
+            .snapshot
+            .user
+            .as_ref()
+            .map(|u| u.id)
+            .unwrap_or_default();
+        let mut out: Vec<(i64, String, Vec<String>)> = Vec::new();
+        for c in &self.snapshot.communities {
+            for (id, name) in &c.usernames {
+                if *id == me {
+                    continue;
+                }
+                match out.iter_mut().find(|p| p.0 == *id) {
+                    Some(p) => p.2.push(c.community.name.clone()),
+                    None => out.push((*id, name.clone(), vec![c.community.name.clone()])),
+                }
+            }
+        }
+        out.sort_by(|a, b| a.1.to_lowercase().cmp(&b.1.to_lowercase()));
+        out
+    }
+    fn topbar(&self, cx: &mut Context<Self>) -> Div {
+        let busy = self.awaiting.is_some() || self.editing.is_some();
+        let mut tabs = div().flex().items_center().gap_1().h_full();
+        let mut keys: Vec<String> = self.settings.pins.clone();
+        if keys.is_empty() {
+            keys = self
+                .snapshot
+                .communities
+                .iter()
+                .map(|c| format!("c:{}", c.community.id))
+                .collect();
+        }
+        for key in keys {
+            let Some((kind, id)) = key
+                .split_once(':')
+                .and_then(|(k, i)| Some((k.to_string(), i.parse::<i64>().ok()?)))
+            else {
+                continue;
+            };
+            if kind == "c" {
+                let Some(c) = self
+                    .snapshot
+                    .communities
+                    .iter()
+                    .find(|c| c.community.id == id)
+                else {
+                    continue;
+                };
+                let active = !self.home && self.community == Some(id);
                 let unread = self
                     .snapshot
                     .heads
                     .iter()
                     .any(|h| h.community_id == Some(id) && h.unread_count > 0);
-                div()
-                    .relative()
-                    .flex_shrink_0()
-                    .when(self.community == Some(id) || unread, |d| {
-                        d.child(
-                            div()
-                                .absolute()
-                                .left(px(-12.))
-                                .top(px(12.))
-                                .w(px(4.))
-                                .h(px(if self.community == Some(id) { 24. } else { 8. }))
-                                .rounded_full()
-                                .bg(rgb(CREAM)),
-                        )
-                    })
-                    .child(
-                        Button::new(SharedString::from(format!("community-{id}")))
-                            .label(initials)
-                            .size(px(46.))
-                            .rounded(px(16.))
-                            .bg(rgb(if self.community == Some(id) {
-                                0x43533E
-                            } else {
-                                RAISED
-                            }))
-                            .text_color(rgb(if self.community == Some(id) {
-                                AMBER
-                            } else {
-                                CREAM
-                            }))
-                            .tooltip(name)
-                            .selected(self.community == Some(id))
-                            .disabled(self.awaiting.is_some() || self.editing.is_some())
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.community = Some(id);
-                                if let Some(head) = this
-                                    .snapshot
-                                    .heads
-                                    .iter()
-                                    .find(|h| h.community_id == Some(id))
-                                {
-                                    this.command(Command::Select(head.id), cx);
-                                }
-                                cx.notify()
-                            })),
+                tabs = tabs.child(
+                    self.tab(
+                        format!("tab-{key}"),
+                        c.community.name.clone(),
+                        id,
+                        true,
+                        active,
+                        unread,
                     )
-            }))
+                    .when(!busy, |d| {
+                        d.on_click(cx.listener(move |this, _, _, cx| this.open_community(id, cx)))
+                    }),
+                );
+            } else {
+                let name = self.member_name(id);
+                let unread = self.snapshot.heads.iter().any(|h| {
+                    h.community_id.is_none() && h.participants.contains(&id) && h.unread_count > 0
+                });
+                let active = self.home
+                    && self.snapshot.heads.iter().any(|h| {
+                        Some(h.id) == self.snapshot.selected
+                            && h.community_id.is_none()
+                            && h.participants.contains(&id)
+                    });
+                tabs = tabs.child(
+                    self.tab(format!("tab-{key}"), name, id, false, active, unread)
+                        .when(!busy, |d| {
+                            d.on_click(cx.listener(move |this, _, _, cx| this.open_person(id, cx)))
+                        }),
+                );
+            }
+        }
+        let faces = self.faces();
+        div()
+            .h(px(56.))
+            .flex_shrink_0()
+            .px_5()
+            .flex()
+            .items_center()
+            .gap_5()
+            .border_b_1()
+            .border_color(rgb(BORDER))
+            .bg(rgb(SURFACE))
+            .child(
+                div()
+                    .id("home-wordmark")
+                    .cursor_pointer()
+                    .text_size(px(22.))
+                    .font_weight(FontWeight::BOLD)
+                    .text_color(rgb(if self.home { CREAM } else { MUTED }))
+                    .child("Porch")
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if !busy {
+                            this.home = true;
+                            this.people_view = true;
+                            this.community = None;
+                            cx.notify();
+                        }
+                    })),
+            )
+            .child(tabs)
             .child(div().flex_1())
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .children(faces.iter().enumerate().map(|(i, (id, name))| {
+                        avatar(*id, name, 28.)
+                            .ml(px(if i == 0 { 0. } else { -8. }))
+                            .border_2()
+                            .border_color(rgb(SURFACE))
+                    })),
+            )
+            .when(faces.len() > 0, |d| d)
             .child(
                 Button::new("settings")
                     .icon(icon("settings"))
                     .ghost()
-                    .size(px(40.))
+                    .size(px(36.))
                     .tooltip("Display and session settings")
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.show_settings = !this.show_settings;
                         cx.notify()
                     })),
             )
+    }
+    fn faces(&self) -> Vec<(i64, String)> {
+        let mut out = Vec::new();
+        if let Some(c) = self
+            .snapshot
+            .communities
+            .iter()
+            .find(|c| !self.home && Some(c.community.id) == self.community)
+        {
+            let mut v: Vec<_> = c.usernames.iter().collect();
+            v.sort();
+            out.extend(v.into_iter().take(5).map(|(i, n)| (*i, n.clone())));
+        } else {
+            out.extend(self.people().into_iter().take(5).map(|p| (p.0, p.1)));
+        }
+        out
+    }
+    fn tab(
+        &self,
+        id: String,
+        name: String,
+        ident: i64,
+        group: bool,
+        active: bool,
+        unread: bool,
+    ) -> Stateful<Div> {
+        div()
+            .id(SharedString::from(id))
+            .h_full()
+            .px_3()
+            .flex()
+            .items_center()
+            .gap_2()
+            .cursor_pointer()
+            .border_b_2()
+            .border_color(rgb(if active { AMBER } else { SURFACE }))
+            .text_size(px(14.))
+            .text_color(rgb(if active { CREAM } else { MUTED }))
+            .child(if group {
+                div()
+                    .size(px(24.))
+                    .rounded(px(7.))
+                    .bg(rgb(0x435846))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_size(px(11.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(rgb(CREAM))
+                    .child(
+                        name.chars()
+                            .next()
+                            .map(|c| c.to_uppercase().to_string())
+                            .unwrap_or_default(),
+                    )
+            } else {
+                avatar(ident, &name, 24.)
+            })
+            .child(name)
+            .when(unread, |d| {
+                d.child(div().size(px(6.)).rounded_full().bg(rgb(AMBER)))
+            })
     }
     fn ptt(&mut self, held: bool, cx: &mut Context<Self>) {
         let v = &self.snapshot.voice;
@@ -596,14 +757,12 @@ impl Porch {
             .communities
             .iter()
             .find(|c| Some(c.community.id) == self.community);
-        let title = community
-            .map(|c| c.community.name.as_str())
-            .unwrap_or("Direct messages");
         let mut list = div()
             .id("channels")
             .flex_1()
             .overflow_y_scroll()
-            .p_2()
+            .px_2()
+            .py_2()
             .flex()
             .flex_col()
             .gap_1();
@@ -693,53 +852,65 @@ impl Porch {
                 }
             }
         } else {
-            list = list.child(small("DIRECT MESSAGES"));
-            for head in self
+            let q = self.search.read(cx).value().to_lowercase();
+            let mut heads: Vec<&ConversationHead> = self
                 .snapshot
                 .heads
                 .iter()
-                .filter(|h| h.community_id.is_none())
-            {
-                list = list.child(self.channel_button(head, cx));
+                .filter(|h| {
+                    h.community_id.is_none() && self.head_title(h).to_lowercase().contains(q.trim())
+                })
+                .collect();
+            heads.sort_by(|a, b| b.last_message_id.cmp(&a.last_message_id));
+            for head in heads {
+                list = list.child(self.dm_row(head, cx));
             }
-            list = list.child(
-                div()
-                    .mt_5()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(small("START A CONVERSATION"))
-                    .child(Input::new(&self.dm))
-                    .child(
-                        Button::new("new-dm")
-                            .disabled(self.awaiting.is_some() || self.editing.is_some())
-                            .label("Open DM")
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                let raw = this.dm.read(cx).value();
-                                let ids: Result<Vec<i64>, _> =
-                                    raw.split(',').map(|s| s.trim().parse()).collect();
-                                match ids {
-                                    Ok(ids)
-                                        if !ids.is_empty()
-                                            && ids.len() <= 19
-                                            && ids.iter().all(|id| *id > 0) =>
-                                    {
-                                        this.command(Command::CreateDm(ids), cx);
-                                    }
-                                    _ => {
-                                        this.error = Some(
-                                            "Enter 1–19 positive member IDs, separated by commas."
-                                                .into(),
-                                        );
-                                        cx.notify();
-                                    }
-                                }
-                            })),
-                    ),
-            );
         }
+        let header = if let Some(c) = community {
+            let key = format!("c:{}", c.community.id);
+            let pinned = self.pinned(&key);
+            div()
+                .h(px(48.))
+                .px_4()
+                .flex()
+                .items_center()
+                .justify_between()
+                .child(heading(c.community.name.clone()).text_size(px(16.)))
+                .child(
+                    Button::new("pin-community")
+                        .ghost()
+                        .xsmall()
+                        .icon(icon("pin"))
+                        .selected(pinned)
+                        .tooltip(if pinned {
+                            "Unpin from top bar"
+                        } else {
+                            "Pin to top bar"
+                        })
+                        .on_click(
+                            cx.listener(move |this, _, _, cx| this.toggle_pin(key.clone(), cx)),
+                        ),
+                )
+        } else {
+            div().px_3().pt_4().pb_2().flex().flex_col().gap_2().child(
+                div()
+                    .h(px(40.))
+                    .rounded(px(8.))
+                    .bg(rgb(RAISED))
+                    .px_3()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(icon("search").text_color(rgb(MUTED)))
+                    .child(
+                        div()
+                            .flex_1()
+                            .child(Input::new(&self.search).appearance(false).bordered(false)),
+                    ),
+            )
+        };
         div()
-            .w(px(288.))
+            .w(px(if community.is_some() { 260. } else { 340. }))
             .flex_shrink_0()
             .h_full()
             .bg(rgb(SURFACE))
@@ -747,21 +918,169 @@ impl Porch {
             .border_color(rgb(BORDER))
             .flex()
             .flex_col()
-            .child(
-                div()
-                    .h(px(48.))
-                    .px_5()
-                    .flex()
-                    .items_center()
-                    .border_b_1()
-                    .border_color(rgb(BORDER))
-                    .child(heading(title.to_string())),
-            )
+            .child(header)
             .child(list)
             .child(self.voice_shelf(cx))
             .child(self.user_panel(cx))
     }
-
+    fn head_title(&self, head: &ConversationHead) -> String {
+        if head.community_id.is_some() {
+            return head.name.clone();
+        }
+        let me = self
+            .snapshot
+            .user
+            .as_ref()
+            .map(|u| u.id)
+            .unwrap_or_default();
+        let names: Vec<String> = head
+            .participants
+            .iter()
+            .filter(|p| **p != me)
+            .map(|p| self.member_name(*p))
+            .collect();
+        if names.is_empty() || names.iter().any(|n| n.starts_with("User ")) {
+            head.name.clone()
+        } else {
+            names.join(", ")
+        }
+    }
+    fn dm_row(&self, head: &ConversationHead, cx: &mut Context<Self>) -> Stateful<Div> {
+        let id = head.id;
+        let me = self
+            .snapshot
+            .user
+            .as_ref()
+            .map(|u| u.id)
+            .unwrap_or_default();
+        let other = head
+            .participants
+            .iter()
+            .copied()
+            .find(|p| *p != me)
+            .unwrap_or(id);
+        let selected = self.snapshot.selected == Some(id) && !self.people_view;
+        let busy = self.awaiting.is_some() || self.editing.is_some();
+        div()
+            .id(SharedString::from(format!("channel-{id}")))
+            .h(px(60.))
+            .px_3()
+            .rounded(px(8.))
+            .flex()
+            .items_center()
+            .gap_3()
+            .cursor_pointer()
+            .bg(rgb(if selected { SELECTED } else { SURFACE }))
+            .hover(|d| d.bg(rgb(RAISED)))
+            .child(avatar(other, &self.head_title(head), 36.))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .child(heading(self.head_title(head)).text_size(px(14.)))
+                    .child(
+                        small(if head.unread_count > 0 {
+                            format!("{} unread", head.unread_count)
+                        } else {
+                            String::new()
+                        })
+                        .text_size(px(13.)),
+                    ),
+            )
+            .when(head.unread_count > 0, |d| {
+                d.child(
+                    div()
+                        .min_w(px(18.))
+                        .h(px(18.))
+                        .rounded_full()
+                        .bg(rgb(AMBER))
+                        .text_size(px(11.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(head.unread_count.to_string()),
+                )
+            })
+            .when(!busy, |d| {
+                d.on_click(cx.listener(move |this, _, _, cx| {
+                    this.people_view = false;
+                    this.command(Command::Select(id), cx);
+                    cx.notify();
+                }))
+            })
+    }
+    fn people_panel(&self, cx: &mut Context<Self>) -> Div {
+        let people = self.people();
+        div()
+            .flex_1()
+            .min_w_0()
+            .h_full()
+            .bg(rgb(PAGE))
+            .flex()
+            .flex_col()
+            .child(
+                div()
+                    .h(px(56.))
+                    .px_6()
+                    .flex()
+                    .items_center()
+                    .gap_3()
+                    .child(heading("People").text_size(px(16.)))
+                    .child(small(people.len().to_string())),
+            )
+            .child(
+                div()
+                    .id("people")
+                    .flex_1()
+                    .overflow_y_scroll()
+                    .px_6()
+                    .children(people.into_iter().map(|(id, name, groups)| {
+                        let key = format!("u:{id}");
+                        let pinned = self.pinned(&key);
+                        div()
+                            .h(px(62.))
+                            .flex_shrink_0()
+                            .flex()
+                            .items_center()
+                            .gap_3()
+                            .border_b_1()
+                            .border_color(rgb(BORDER))
+                            .child(avatar(id, &name, 40.))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .child(heading(name).text_size(px(15.)))
+                                    .child(small(groups.join(", "))),
+                            )
+                            .child(
+                                Button::new(SharedString::from(format!("pin-{id}")))
+                                    .ghost()
+                                    .small()
+                                    .icon(icon("pin"))
+                                    .selected(pinned)
+                                    .tooltip(if pinned {
+                                        "Unpin from top bar"
+                                    } else {
+                                        "Pin to top bar"
+                                    })
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.toggle_pin(key.clone(), cx)
+                                    })),
+                            )
+                            .child(
+                                Button::new(SharedString::from(format!("msg-{id}")))
+                                    .ghost()
+                                    .small()
+                                    .icon(icon("send"))
+                                    .tooltip("Message")
+                                    .on_click(
+                                        cx.listener(move |this, _, _, cx| this.open_person(id, cx)),
+                                    ),
+                            )
+                    })),
+            )
+    }
     fn channel_button(&self, head: &ConversationHead, cx: &mut Context<Self>) -> Button {
         let id = head.id;
         let label = if head.unread_count > 0 {
@@ -798,6 +1117,11 @@ impl Porch {
             .user
             .as_ref()
             .is_some_and(|u| u.id == message.author_id);
+        let dm = self
+            .snapshot
+            .heads
+            .iter()
+            .any(|h| h.id == conversation && h.community_id.is_none());
         let mut row = div()
             .flex_shrink_0()
             .group("message")
@@ -805,13 +1129,13 @@ impl Porch {
             .px_3()
             .py_1()
             .mt(if grouped { px(0.) } else { px(8.) })
-            .hover(|d| d.bg(rgb(0x1C211C)))
+            .hover(|d| d.bg(rgb(0x181310)))
             .flex()
             .gap_3()
             .child(if grouped {
-                div().w(px(40.)).flex_shrink_0()
+                div().w(px(38.)).flex_shrink_0()
             } else {
-                avatar(message.author_id, &author, 40.)
+                avatar(message.author_id, &author, 38.)
             })
             .child(
                 div()
@@ -838,7 +1162,20 @@ impl Porch {
                             message.reply_to.unwrap_or_default()
                         )))
                     })
-                    .child(div().whitespace_normal().child(text.clone()))
+                    .child(if dm {
+                        div().flex().child(
+                            div()
+                                .max_w(px(640.))
+                                .px_4()
+                                .py_2()
+                                .rounded(px(14.))
+                                .bg(rgb(if own { OWN_BUBBLE } else { OTHER_BUBBLE }))
+                                .whitespace_normal()
+                                .child(text.clone()),
+                        )
+                    } else {
+                        div().whitespace_normal().child(text.clone())
+                    })
                     .child(self.attachments(message, cx))
                     .when(!message.reactions.is_empty(), |d| {
                         d.child(small(
@@ -959,29 +1296,27 @@ impl Porch {
         panel = panel
             .child(
                 div()
-                    .h(px(48.))
+                    .h(px(56.))
                     .flex_shrink_0()
                     .px_6()
                     .flex()
                     .items_center()
-                    .justify_between()
-                    .border_b_1()
-                    .border_color(rgb(BORDER))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap_1()
-                            .flex_row()
-                            .items_center()
-                            .gap_2()
-                            .child(icon(if head.community_id.is_some() {
-                                "hash"
-                            } else {
-                                "inbox"
-                            }))
-                            .child(heading(head.name.clone())),
-                    ),
+                    .gap_3()
+                    .child(if head.community_id.is_some() {
+                        icon("hash").text_color(rgb(MUTED)).into_any_element()
+                    } else {
+                        avatar(
+                            head.participants
+                                .iter()
+                                .copied()
+                                .find(|p| Some(*p) != self.snapshot.user.as_ref().map(|u| u.id))
+                                .unwrap_or(head.id),
+                            &self.head_title(head),
+                            34.,
+                        )
+                        .into_any_element()
+                    })
+                    .child(heading(self.head_title(head)).text_size(px(16.))),
             )
             .child(
                 div()
@@ -1001,7 +1336,7 @@ impl Porch {
                             .gap_3()
                             .child(
                                 Button::new("older")
-                                    .ghost()
+                                    .outline()
                                     .small()
                                     .label("Load earlier messages")
                                     .on_click(cx.listener(|this, _, _, cx| {
@@ -1011,7 +1346,7 @@ impl Porch {
                             .child(
                                 Button::new("latest")
                                     .disabled(self.awaiting.is_some() || self.editing.is_some())
-                                    .ghost()
+                                    .outline()
                                     .small()
                                     .label("Latest")
                                     .on_click(cx.listener(|this, _, _, cx| {
@@ -1105,7 +1440,8 @@ impl Porch {
             )
             .child(
                 div()
-                    .p_5()
+                    .px_6()
+                    .pb_5()
                     .flex_shrink_0()
                     .flex()
                     .flex_col()
@@ -1143,7 +1479,7 @@ impl Porch {
                             .prefix(
                                 Button::new("choose-file")
                                     .ghost()
-                                    .icon(icon("plus"))
+                                    .icon(icon("paperclip"))
                                     .tooltip("Attach a file")
                                     .disabled(self.editing.is_some() || self.snapshot.busy)
                                     .on_click(cx.listener(|this, _, window, cx| {
@@ -1153,6 +1489,8 @@ impl Porch {
                             .suffix(
                                 Button::new("send")
                                     .primary()
+                                    .rounded_full()
+                                    .bg(rgb(AMBER))
                                     .icon(icon("send"))
                                     .tooltip(if self.editing.is_some() {
                                         "Save edit"
@@ -1164,102 +1502,10 @@ impl Porch {
                                         cx.listener(|this, _, window, cx| this.send(window, cx)),
                                     ),
                             ),
-                    )
-                    .child(small("Enter to send · Shift+Enter for a new line")),
+                    ),
             );
         panel
     }
-    fn members(&self) -> impl IntoElement {
-        let community = self
-            .snapshot
-            .communities
-            .iter()
-            .find(|c| Some(c.community.id) == self.community);
-        let mut groups: std::collections::BTreeMap<String, Vec<i64>> =
-            std::collections::BTreeMap::new();
-        if let Some(c) = community {
-            for member in &c.members {
-                let label = if member.user_id == c.community.owner_id {
-                    "Owner".to_string()
-                } else {
-                    c.roles
-                        .iter()
-                        .filter(|r| member.role_ids.contains(&r.id))
-                        .max_by_key(|r| r.position)
-                        .map(|r| r.name.clone())
-                        .unwrap_or_else(|| "Members".into())
-                };
-                groups.entry(label).or_default().push(member.user_id);
-            }
-        } else if let Some(head) = self
-            .snapshot
-            .heads
-            .iter()
-            .find(|h| Some(h.id) == self.snapshot.selected)
-        {
-            groups.insert("In this conversation".into(), head.participants.clone());
-        }
-        let mut panel = div()
-            .id("members")
-            .w(px(240.))
-            .flex_shrink_0()
-            .h_full()
-            .bg(rgb(SURFACE))
-            .border_l_1()
-            .border_color(rgb(BORDER))
-            .px_4()
-            .py_5()
-            .overflow_y_scroll()
-            .flex()
-            .flex_col()
-            .gap_2();
-        let count: usize = groups.values().map(Vec::len).sum();
-        panel = panel.child(
-            div()
-                .h(px(48.))
-                .flex_shrink_0()
-                .flex()
-                .items_center()
-                .border_b_1()
-                .border_color(rgb(BORDER))
-                .child(heading(format!("Members · {count}"))),
-        );
-        for (role, ids) in groups {
-            panel = panel.child(
-                small(format!("{} · {}", role.to_uppercase(), ids.len()))
-                    .mt_4()
-                    .text_size(px(10.)),
-            );
-            for id in ids {
-                let name = self.member_name(id);
-                panel = panel.child(
-                    div()
-                        .py_2()
-                        .flex()
-                        .items_center()
-                        .gap_3()
-                        .child(avatar(id, &name, 32.))
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .child(
-                                    div()
-                                        .text_size(px(12.))
-                                        .font_weight(FontWeight::SEMIBOLD)
-                                        .child(name),
-                                )
-                                .when(
-                                    self.snapshot.user.as_ref().is_some_and(|u| u.id == id),
-                                    |d| d.child(small("You").text_size(px(10.))),
-                                ),
-                        ),
-                );
-            }
-        }
-        panel
-    }
-
     fn settings_panel(&self, cx: &mut Context<Self>) -> Div {
         div().p_5().bg(rgb(RAISED)).flex().flex_col().gap_3().border_b_1().border_color(rgb(BORDER))
             .child(heading("Settings"))
@@ -1281,6 +1527,24 @@ impl Render for Porch {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // Keep the subscriptions alive for the view lifetime.
         let _ = &self.subscriptions;
+        if self.placeholder_for != self.snapshot.selected {
+            self.placeholder_for = self.snapshot.selected;
+            let text = self
+                .snapshot
+                .heads
+                .iter()
+                .find(|h| Some(h.id) == self.snapshot.selected)
+                .map(|h| {
+                    if h.community_id.is_some() {
+                        format!("Message #{}", h.name)
+                    } else {
+                        format!("Message {}", self.head_title(h))
+                    }
+                })
+                .unwrap_or_else(|| "Message".into());
+            self.composer
+                .update(cx, |s, cx| s.set_placeholder(text, _window, cx));
+        }
         div().size_full().flex().flex_col()
             .on_key_down(cx.listener(|this,e:&KeyDownEvent,_,cx|{if e.keystroke.key=="f9"&&!e.is_held{this.ptt(true,cx);}}))
             .on_key_up(cx.listener(|this,e:&KeyUpEvent,_,cx|{if e.keystroke.key=="f9"{this.ptt(false,cx);}}))
@@ -1291,7 +1555,7 @@ impl Render for Porch {
                 .child(small(format!("{} local drafts were removed when access ended. Some may already have been delivered.",self.snapshot.notice.as_ref().map(|n|n.sends.len()).unwrap_or_default())))
                 .child(Button::new("ack-notice").ghost().small().label("Dismiss").on_click(cx.listener(|this,_,_,cx|{this.command(Command::AcknowledgeNotice,cx);})))))
             .child(if self.snapshot.user.is_none(){self.login_view(cx).into_any_element()}else{
-                div().flex_1().min_h_0().flex().child(self.rail(cx)).child(self.sidebar(cx)).child(self.conversation(cx)).when(self.settings.members,|d|d.child(self.members())).into_any_element()
+                div().flex_1().min_h_0().flex().flex_col().child(self.topbar(cx)).child(div().flex_1().min_h_0().flex().child(self.sidebar(cx)).child(if self.home && self.people_view { self.people_panel(cx) } else { self.conversation(cx) })).into_any_element()
             })
     }
 }
