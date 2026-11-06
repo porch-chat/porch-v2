@@ -1,0 +1,249 @@
+import 'dart:async';
+
+import 'package:commet/client/client.dart';
+import 'package:commet/client/client_manager.dart';
+import 'package:commet/client/components/account_switch_prefix/account_switch_prefix.dart';
+import 'package:commet/client/stale_info.dart';
+import 'package:commet/main.dart';
+import 'package:commet/ui/molecules/user_panel.dart';
+import 'package:commet/ui/navigation/adaptive_text_dialog.dart';
+import 'package:commet/ui/pages/login/login_page.dart';
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:just_the_tooltip/just_the_tooltip.dart';
+import 'package:provider/provider.dart';
+import 'package:tiamat/tiamat.dart' as tiamat;
+import 'package:tiamat/tiamat.dart';
+
+class AccountManagementSettingsTab extends StatefulWidget {
+  const AccountManagementSettingsTab({super.key, required this.clientManager});
+  static ValueKey addAccountKey =
+      const ValueKey("ACCOUNT_MANAGEMENT_SETTINGS_ADD_ACCOUNT_BUTTON");
+  final ClientManager clientManager;
+  @override
+  State<AccountManagementSettingsTab> createState() =>
+      _AccountManagementSettingsTabState();
+}
+
+class _AccountManagementSettingsTabState
+    extends State<AccountManagementSettingsTab> {
+  StreamSubscription<int>? onClientAddedListener;
+  StreamSubscription<StalePeerInfo>? onClientRemovedListener;
+  final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
+  late int _numClients;
+
+  String get promptAddAccount => Intl.message("Add Account",
+      desc: "Label for button in settings to add another account",
+      name: "promptAddAccount");
+
+  String get promptLogoutSingleAccount => Intl.message("Logout",
+      desc: "Label for button in settings to log out of an account",
+      name: "promptLogoutSingleAccount");
+
+  String get labelCurrentAccountsHeader => Intl.message("Current Accounts",
+      desc: "Label for header of accounts list",
+      name: "labelCurrentAccountsHeader");
+
+  @override
+  Widget build(BuildContext context) {
+    return manageAccountsTab(context);
+  }
+
+  @override
+  void initState() {
+    onClientAddedListener =
+        widget.clientManager.onClientAdded.stream.listen((index) {
+      _listKey.currentState?.insertItem(index);
+      setState(() {
+        _numClients++;
+      });
+    });
+
+    onClientRemovedListener =
+        widget.clientManager.onClientRemoved.stream.listen((info) {
+      _listKey.currentState?.removeItem(
+          info.index,
+          (context, animation) => SizeTransition(
+                sizeFactor: animation,
+                child: accountListItem(
+                    displayName: info.displayName!,
+                    avatar: info.avatar,
+                    detail: info.identifier),
+              ));
+    });
+
+    _numClients = widget.clientManager.clients.length;
+
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    onClientAddedListener?.cancel();
+    onClientRemovedListener?.cancel();
+    super.dispose();
+  }
+
+  Widget manageAccountsTab(BuildContext context) {
+    ClientManager clientManager = Provider.of<ClientManager>(context);
+
+    return Align(
+      alignment: Alignment.topCenter,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            Panel(
+              header: labelCurrentAccountsHeader,
+              mode: TileType.surfaceContainerLow,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  accountListBuilder(context, clientManager),
+                  addAccountButton(context)
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget accountListBuilder(BuildContext context, ClientManager clientmanager) {
+    var clients = clientmanager.clients;
+
+    return AnimatedList(
+      initialItemCount: _numClients,
+      shrinkWrap: true,
+      key: _listKey,
+      itemBuilder: (context, index, animation) {
+        return SizeTransition(
+          sizeFactor: animation,
+          child: accountListItem(
+              client: clients[index],
+              displayName: clients[index].self!.displayName,
+              avatar: clients[index].self!.avatar,
+              detail: clients[index].self!.identifier,
+              internalId: clients[index].identifier,
+              onLogoutClicked: () =>
+                  clientmanager.logoutClient(clients[index])),
+        );
+      },
+    );
+  }
+
+  Widget accountListItem(
+      {required String displayName,
+      Client? client,
+      ImageProvider? avatar,
+      String? detail,
+      String? internalId,
+      Function? onLogoutClicked}) {
+    String detailString = detail ?? "";
+
+    if (preferences.developerMode.value && internalId != null) {
+      detailString = "$detail - ($internalId)";
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8.0, 4, 12, 4),
+      child: Material(
+        color: Colors.transparent,
+        clipBehavior: Clip.hardEdge,
+        borderRadius: BorderRadius.circular(8),
+        child: tiamat.ContextMenu(
+          modal: true,
+          items: client == null
+              ? []
+              : [
+                  if (_numClients > 1)
+                    tiamat.ContextMenuItem(
+                        text: "Set Prefix",
+                        onPressed: () {
+                          setPrefixDialog(client);
+                        })
+                ],
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                children: [
+                  UserPanelView(
+                    displayName: displayName,
+                    avatar: avatar,
+                    detail: detailString,
+                  ),
+                ],
+              ),
+              tiamat.Button.danger(
+                text: promptLogoutSingleAccount,
+                onTap: () {
+                  onLogoutClicked?.call();
+                },
+              )
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> setPrefixDialog(Client client) async {
+    final component = client.getComponent<AccountSwitchPrefix>();
+
+    if (component == null) {
+      return;
+    }
+
+    final newPrefix = await AdaptiveTextDialog.show(
+        title: "Set Prefix",
+        placeholder: "Enter Prefix",
+        description:
+            "When more than one of your logged in accounts share the same room, you can type this prefix to quickly send messages from this account",
+        context,
+        defaultText: component.clientPrefix);
+    if (newPrefix == null) {
+      return;
+    }
+
+    component.setClientPrefix(newPrefix);
+  }
+
+  Padding addAccountButton(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 8, 12, 12),
+      child: Align(
+          alignment: Alignment.centerRight,
+          child: JustTheTooltip(
+            content: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: tiamat.Text(promptAddAccount),
+            ),
+            preferredDirection: AxisDirection.down,
+            offset: 5,
+            tailLength: 5,
+            tailBaseWidth: 5,
+            backgroundColor:
+                Theme.of(context).colorScheme.surfaceContainerLowest,
+            child: tiamat.CircleButton(
+              key: AccountManagementSettingsTab.addAccountKey,
+              icon: Icons.add,
+              radius: 20,
+              onPressed: () {
+                Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => LoginPage(
+                          canNavigateBack: true,
+                          onSuccess: (
+                            _,
+                          ) {
+                            Navigator.of(context).pop();
+                          },
+                        )));
+              },
+            ),
+          )),
+    );
+  }
+}

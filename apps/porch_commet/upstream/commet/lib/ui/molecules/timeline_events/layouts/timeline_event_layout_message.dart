@@ -1,0 +1,207 @@
+import 'package:commet/diagnostic/benchmark_values.dart';
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:tiamat/tiamat.dart' as tiamat;
+
+class TimelineEventLayoutMessage extends StatelessWidget {
+  const TimelineEventLayoutMessage(
+      {super.key,
+      required this.senderName,
+      required this.senderColor,
+      this.viaSenderName,
+      this.senderAvatar,
+      this.formattedContent,
+      this.attachments,
+      this.inResponseTo,
+      this.reactions,
+      this.timestamp,
+      this.sticker,
+      this.thread,
+      this.urlPreviews,
+      this.readReceipts,
+      this.onAvatarTapped,
+      this.edited = false,
+      this.isMentioningSelf = false,
+      this.avatarSize = 32,
+      this.avatarBuilder,
+      this.showSender = true,
+      this.onDoubleTapMessage});
+  final String senderName;
+  final Color senderColor;
+  final String? viaSenderName;
+  final ImageProvider? senderAvatar;
+  final Widget? formattedContent;
+  final Widget? attachments;
+  final Widget? inResponseTo;
+  final Widget? reactions;
+  final Widget? urlPreviews;
+  final Widget? thread;
+  final Widget? sticker;
+  final Widget? readReceipts;
+  final bool showSender;
+  final bool edited;
+  final bool isMentioningSelf;
+  final String? timestamp;
+  final Function()? onAvatarTapped;
+  final Widget Function(Widget child)? avatarBuilder;
+  final Function()? onDoubleTapMessage;
+
+  final double avatarSize;
+
+  String get messageEditedMarker => Intl.message("(Edited)",
+      name: "messageEditedMarker",
+      desc: "Short text to mark that a message has been edited");
+
+  String messageSentViaProfile(String sender) => Intl.message("via $sender",
+      name: "messageSentViaProfile",
+      desc:
+          "Shows the real name of the account which sent a message with a per message profile",
+      args: [sender]);
+
+  @override
+  Widget build(BuildContext context) {
+    BenchmarkValues.numTimelineMessageBodyBuilt += 1;
+
+    const double mentionHighlightSize = 3;
+    double leftPadding = isMentioningSelf ? 16 - mentionHighlightSize : 16;
+
+    Widget result = Padding(
+      padding: EdgeInsets.fromLTRB(leftPadding, 2, 8, 2),
+      child: Column(
+        children: [
+          if (inResponseTo != null) inResponseTo!,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              avatar(),
+              Flexible(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 0, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (showSender)
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Flexible(child: name()),
+                            if (timestamp != null)
+                              tiamat.Text.labelLow(timestamp!),
+                          ],
+                        ),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: GestureDetector(
+                              onDoubleTap: onDoubleTapMessage,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (formattedContent != null)
+                                    RepaintBoundary(child: formattedContent!),
+                                  if (edited)
+                                    tiamat.Text.labelLow(messageEditedMarker),
+                                  if (attachments != null) attachments!,
+                                  if (sticker != null) sticker!,
+                                  if (urlPreviews != null) urlPreviews!,
+                                  if (reactions != null)
+                                    Padding(
+                                      padding:
+                                          const EdgeInsets.fromLTRB(0, 4, 0, 0),
+                                      child: reactions!,
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          SizedBox(
+                            width: 35,
+                            child: readReceipts,
+                          )
+                        ],
+                      )
+                    ],
+                  ),
+                ),
+              )
+            ],
+          ),
+          if (thread != null) thread!,
+        ],
+      ),
+    );
+
+    if (isMentioningSelf)
+      result = Container(
+        decoration: BoxDecoration(
+            border: Border(
+                left: BorderSide(
+                    color: Theme.of(context).colorScheme.tertiary,
+                    width: mentionHighlightSize)),
+            color:
+                Theme.of(context).colorScheme.tertiaryContainer.withAlpha(30)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(0, 0, 0, 0),
+          child: result,
+        ),
+      );
+
+    return result;
+  }
+
+  Widget name() {
+    Widget result = MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onAvatarTapped,
+        child: tiamat.Text.name(
+          senderName,
+          color: senderColor,
+        ),
+      ),
+    );
+
+    if (viaSenderName != null) {
+      result = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(child: result),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(6, 0, 0, 0),
+            child: tiamat.Text.labelLow(messageSentViaProfile(viaSenderName!)),
+          ),
+        ],
+      );
+    }
+
+    return SelectionContainer.disabled(child: result);
+  }
+
+  Widget avatar() {
+    Widget result = SizedBox(
+      width: avatarSize,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: onAvatarTapped,
+          child: tiamat.Avatar(
+            radius: avatarSize / 2,
+            image: senderAvatar,
+            placeholderText: senderName,
+            placeholderColor: senderColor,
+            isPadding: showSender == false,
+          ),
+        ),
+      ),
+    );
+
+    if (avatarBuilder != null) {
+      result = avatarBuilder!.call(result);
+    }
+
+    return result;
+  }
+}

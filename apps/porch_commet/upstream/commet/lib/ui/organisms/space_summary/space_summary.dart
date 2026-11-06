@@ -1,0 +1,146 @@
+import 'dart:async';
+
+import 'package:commet/client/client.dart';
+import 'package:commet/client/components/invitation/invitation_component.dart';
+import 'package:commet/client/components/space_banner/space_banner_component.dart';
+import 'package:commet/client/components/space_color_scheme/space_color_scheme_component.dart';
+import 'package:commet/client/room_preview.dart';
+import 'package:commet/client/space_child.dart';
+import 'package:commet/ui/navigation/adaptive_dialog.dart';
+import 'package:commet/ui/organisms/invitation_view/send_invitation.dart';
+import 'package:commet/ui/organisms/space_summary/space_summary_view.dart';
+import 'package:commet/ui/pages/get_or_create_room/get_or_create_room.dart';
+import 'package:commet/ui/pages/settings/room_settings_page.dart';
+import 'package:commet/ui/pages/settings/space_settings_page.dart';
+import 'package:flutter/material.dart';
+import '../../navigation/navigation_utils.dart';
+
+class SpaceSummary extends StatefulWidget {
+  const SpaceSummary(
+      {super.key,
+      required this.space,
+      this.onRoomTap,
+      this.onSpaceTap,
+      this.onLeaveRoom});
+  final Space space;
+  final Function(Room room)? onRoomTap;
+  final Function(Space space)? onSpaceTap;
+  final Function()? onLeaveRoom;
+  @override
+  State<SpaceSummary> createState() => _SpaceSummaryState();
+}
+
+class _SpaceSummaryState extends State<SpaceSummary> {
+  StreamSubscription? onUpdateSubscription;
+
+  @override
+  void initState() {
+    onUpdateSubscription = widget.space.onUpdate.listen((_) {
+      setState(() {});
+    });
+
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    onUpdateSubscription?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    var colorScheme = Theme.of(context).colorScheme;
+
+    var comp = widget.space.getComponent<SpaceColorSchemeComponent>();
+    if (comp != null) {
+      colorScheme = comp.scheme;
+    }
+
+    var banner = widget.space.getComponent<SpaceBannerComponent>();
+
+    return SpaceSummaryView(
+      space: widget.space,
+      displayName: widget.space.displayName,
+      avatar: widget.space.avatar,
+      visibility: widget.space.visibility,
+      joinRoom: joinRoom,
+      topic: widget.space.topic,
+      banner: banner?.banner,
+      openSpaceSettings: openSpaceSettings,
+      onRoomSettingsButtonTap: openRoomSettings,
+      onInviteButtonTap:
+          widget.space.permissions.canInviteUser ? onInviteTap : null,
+      spaceColor: widget.space.color,
+      onRoomTap: widget.onRoomTap,
+      showSpaceSettingsButton: widget.space.permissions.canEditAnything,
+      onAddRoomButtonTap: onAddRoomButtonTap,
+      canAddRoom: widget.space.permissions.canEditChildren,
+      onSpaceTap: widget.onSpaceTap,
+      colorScheme: colorScheme,
+    );
+  }
+
+  Future<void> createRoom(Client client, CreateRoomArgs args) async {
+    var room = await client.createRoom(args);
+    await widget.space.setSpaceChildRoom(room);
+  }
+
+  void openSpaceSettings() {
+    NavigationUtils.navigateTo(context, SpaceSettingsPage(space: widget.space));
+  }
+
+  void openRoomSettings(Room room) {
+    NavigationUtils.navigateTo(
+        context,
+        RoomSettingsPage(
+            room: room,
+            contextSpace: widget.space,
+            onLeaveRoom: widget.onLeaveRoom));
+  }
+
+  void onAddRoomButtonTap() async {
+    var room = await GetOrCreateRoom.show(
+      widget.space.client,
+      context,
+      currentSpace: widget.space,
+      joinRoom: false,
+      showAllRoomTypes: true,
+      existingRoomsRemoveWhere: (child) {
+        if (child case SpaceChildSpace s) {
+          if (s.child == widget.space) return true;
+        }
+
+        if (widget.space.children.any((i) => i.id == child.id)) {
+          return true;
+        }
+
+        return false;
+      },
+    );
+
+    if (room is SpaceChildRoom) {
+      widget.space.setSpaceChildRoom(room.child);
+    }
+
+    if (room is SpaceChildSpace) {
+      widget.space.setSpaceChildSpace(room.child);
+    }
+  }
+
+  onInviteTap() {
+    final invitation = widget.space.client.getComponent<InvitationComponent>();
+    if (invitation != null) {
+      AdaptiveDialog.show(context,
+          builder: (context) => SendInvitationWidget(
+              widget.space.client, invitation,
+              roomId: widget.space.identifier,
+              displayName: widget.space.displayName),
+          title: "Invite");
+    }
+  }
+
+  Future<void> joinRoom(RoomPreview preview) async {
+    await widget.space.client.joinRoomFromPreview(preview);
+  }
+}

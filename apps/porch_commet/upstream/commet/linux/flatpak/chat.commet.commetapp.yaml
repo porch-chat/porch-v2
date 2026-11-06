@@ -1,0 +1,151 @@
+app-id: chat.commet.commetapp
+runtime: org.gnome.Platform
+runtime-version: '51'
+sdk: org.gnome.Sdk
+command: commet
+separate-locales: false
+
+add-extensions:
+  org.freedesktop.Platform.ffmpeg-full:
+    directory: lib/ffmpeg
+    add-ld-path: .
+    version: '24.08'
+    no-autodownload: true
+    autodelete: false
+
+
+finish-args:
+- "--share=ipc"
+- "--socket=fallback-x11"
+- "--socket=wayland"
+- "--socket=pulseaudio"
+- "--share=network"
+- "--device=all"
+- "--filesystem=xdg-download"
+- "--talk-name=org.freedesktop.Notifications"
+- "--talk-name=org.freedesktop.Flatpak"
+- "--talk-name=org.freedesktop.portal.Documents"
+- "--system-talk-name=org.freedesktop.NetworkManager"
+- "--env=LD_LIBRARY_PATH=/app/lib"
+modules:
+- name: keybinder3
+  buildsystem: autotools
+  post-install:
+  - install -Dm644 COPYING /app/share/licenses/keybinder-3/COPYING
+  sources:
+  - type: archive
+    url: https://github.com/kupferlauncher/keybinder/releases/download/keybinder-3.0-v0.3.2/keybinder-3.0-0.3.2.tar.gz
+    sha256: e6e3de4e1f3b201814a956ab8f16dfc8a262db1937ff1eee4d855365398c6020
+- name: libmpv
+  cleanup:
+  - "/include"
+  - "/lib/pkgconfig"
+  - "/share/man"
+  buildsystem: meson
+  config-opts:
+  - -Dlibmpv=true
+  - -Dlua=disabled
+  - -Ddebug=false
+  - -Dbuild-date=false
+  - -Dcplayer=false
+  sources:
+  - type: git
+    url: https://github.com/mpv-player/mpv.git
+    tag: v0.41.0
+    commit: 41f6a645068483470267271e1d09966ca3b9f413
+    
+  - type: git
+    url: https://github.com/haasn/libplacebo.git
+    commit: cee9b076f2c63104ccfd497fa79c39a867293ec4
+    tag: v7.360.1
+    dest: subprojects/libplacebo
+
+  modules:
+  - name: libass
+    cleanup:
+    - "/include"
+    - "/lib/*.la"
+    - "/lib/pkgconfig"
+    config-opts:
+    - "--disable-static"
+    sources:
+    - type: archive
+      url: https://github.com/libass/libass/releases/download/0.17.1/libass-0.17.1.tar.xz
+      sha256: f0da0bbfba476c16ae3e1cfd862256d30915911f7abaa1b16ce62ee653192784
+    modules:
+    - name: fribidi
+      cleanup:
+      - "/bin"
+      - "/include"
+      - "/lib/pkgconfig"
+      - "/lib/*.la"
+      - "/share/man"
+      buildsystem: meson
+      config-opts:
+      - "--buildtype=release"
+      - "-Ddocs=false"
+      sources:
+      - type: git
+        url: https://github.com/fribidi/fribidi.git
+        tag: v1.0.13
+        commit: b54871c339dabb7434718da3fed2fa63320997e5
+  - name: x264
+    cleanup:
+    - "/include"
+    - "/lib/pkgconfig"
+    - "/share/man"
+    config-opts:
+    - "--disable-cli"
+    - "--enable-shared"
+    sources:
+    - type: git
+      url: https://code.videolan.org/videolan/x264.git
+      commit: a8b68ebfaa68621b5ac8907610d3335971839d52
+      x-checker-data:
+        type: json
+        url: https://code.videolan.org/api/v4/projects/536/repository/commits
+        commit-query: first( .[].id )
+        version-query: first( .[].id )
+        timestamp-query: first( .[].committed_date )
+  - name: nv-codec-headers
+    cleanup:
+    - "*"
+    no-autogen: true
+    make-install-args:
+    - PREFIX=/app
+    sources:
+    - type: git
+      url: https://github.com/FFmpeg/nv-codec-headers.git
+      commit: 855f8263d97bbdcaeabaaaa2997e1ccad7c52dc3
+
+- name: commetapp
+  buildsystem: simple
+  only-arches:
+  - x86_64
+  post-install:
+  - install -Dm755 commet-wrapper ${FLATPAK_DEST}/bin/commet
+  build-commands:
+  - mkdir -p /app/commet
+  - mkdir -p /app/lib/ffmpeg
+  - cp -r bundle /app/commet
+  - chmod +x /app/commet/bundle/commet
+  - install -Dm644 chat.commet.commetapp.metainfo.xml /app/share/appdata/chat.commet.commetapp.appdata.xml
+  - install -Dm644 icon.png /app/share/icons/hicolor/512x512/apps/chat.commet.commetapp.png
+  - install -Dm644 chat.commet.commetapp.desktop /app/share/applications/chat.commet.commetapp.desktop
+  - mkdir -p /app/bin
+  - ls /app/lib64
+  - cp -a /app/lib64/. /app/lib/
+  sources:
+  - type: dir
+    path: commet
+  - type: file
+    path: chat.commet.commetapp.desktop
+  - type: file
+    path: chat.commet.commetapp.metainfo.xml
+  - type: file
+    path: icon.png
+  - type: script
+    dest-filename: commet-wrapper
+    commands:
+      - export TMPDIR=$XDG_RUNTIME_DIR/app/$FLATPAK_ID
+      - exec /app/commet/bundle/commet "$@"

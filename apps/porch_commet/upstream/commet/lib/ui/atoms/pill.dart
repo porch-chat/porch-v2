@@ -1,0 +1,43 @@
+import 'package:flutter/material.dart';
+
+class Pill extends StatelessWidget {
+  final String identifier;
+  final String url;
+  final String displayText;
+  final Future<Map<String, dynamic>>? future;
+  final void Function()? onTap;
+  final ImageProvider? image;
+
+  const Pill({
+    super.key,
+    required this.identifier,
+    required this.url,
+    required this.displayText,
+    this.future,
+    this.onTap,
+    this.image,
+  });
+
+  @override
+  build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(5),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(5),
+        child: Container(
+          padding: const EdgeInsets.all(2),
+          decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primary.withAlpha(200)),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Text(displayText),
+            ],
+          ),
+        ),
+        onTap: () {},
+      ),
+    );
+  }
+}

@@ -1,0 +1,104 @@
+import 'package:commet/client/components/component.dart';
+import 'package:commet/client/components/room_component.dart';
+import 'package:commet/client/components/space_component.dart';
+import 'package:commet/client/matrix/components/account_switch_prefix/matrix_account_switch_prefix.dart';
+import 'package:commet/client/matrix/components/calendar_room_component/matrix_calendar_room_component.dart';
+import 'package:commet/client/matrix/components/command_component/matrix_command_component.dart';
+import 'package:commet/client/matrix/components/direct_messages/matrix_direct_messages_component.dart';
+import 'package:commet/client/matrix/components/donation_awards_component/matrix_donation_awards.dart';
+import 'package:commet/client/matrix/components/emoticon/matrix_emoticon_component.dart';
+import 'package:commet/client/matrix/components/emoticon/matrix_emoticon_state_manager.dart';
+import 'package:commet/client/matrix/components/emoticon/matrix_room_emoticon_component.dart';
+import 'package:commet/client/matrix/components/emoticon/matrix_space_emoticon_component.dart';
+import 'package:commet/client/matrix/components/emoticon_recent/matrix_recent_emoticon_component.dart';
+import 'package:commet/client/matrix/components/event_search/matrix_event_search_component.dart';
+import 'package:commet/client/matrix/components/gif/matrix_gif_component.dart';
+import 'package:commet/client/matrix/components/invitation/matrix_invitation_component.dart';
+import 'package:commet/client/matrix/components/key_verification_component/matrix_key_verification_component.dart';
+import 'package:commet/client/matrix/components/photo_album_room/matrix_photo_album_room_component.dart';
+import 'package:commet/client/matrix/components/pinned_messages/matrix_pinned_messages_component.dart';
+import 'package:commet/client/matrix/components/message_effects/matrix_message_effects_component.dart';
+import 'package:commet/client/matrix/components/polls/matrix_poll_component.dart';
+import 'package:commet/client/matrix/components/profile/matrix_profile_component.dart';
+import 'package:commet/client/matrix/components/push_notifications/matrix_push_notification_component.dart';
+import 'package:commet/client/matrix/components/room_activities/matrix_activities_component.dart';
+import 'package:commet/client/matrix/components/sidebar_entries/matrix_sidebar_entries_component.dart';
+import 'package:commet/client/matrix/components/space_banner/matrix_space_banner_component.dart';
+import 'package:commet/client/matrix/components/space_color_scheme/matrix_space_color_scheme_component.dart';
+import 'package:commet/client/matrix/components/user_color/matrix_user_color_component.dart';
+import 'package:commet/client/matrix/components/petname/matrix_petname_component.dart';
+import 'package:commet/client/matrix/components/user_presence/matrix_user_presence.dart';
+import 'package:commet/client/matrix/components/voip/matrix_voip_component.dart';
+import 'package:commet/client/matrix/components/read_receipts/matrix_read_receipt_component.dart';
+import 'package:commet/client/matrix/components/threads/matrix_threads_component.dart';
+import 'package:commet/client/matrix/components/typing_indicators/matrix_typing_indicators_component.dart';
+import 'package:commet/client/matrix/components/url_preview/matrix_url_preview_component.dart';
+import 'package:commet/client/matrix/components/voip_room/matrix_voip_room_component.dart';
+import 'package:commet/client/matrix/components/widgets/matrix_widget_component.dart';
+import 'package:commet/client/matrix/matrix_client.dart';
+import 'package:commet/client/matrix/matrix_room.dart';
+import 'package:commet/client/matrix/matrix_space.dart';
+
+class ComponentRegistry {
+  static List<Component<MatrixClient>> getMatrixComponents(
+    MatrixClient client,
+  ) {
+    return [
+      MatrixEmoticonComponent(
+        client,
+        MatrixEmoticonPersonalStateManager(client),
+      ),
+      MatrixPushNotificationComponent(client),
+      MatrixCommandComponent(client),
+
+      MatrixVoipComponent(client),
+      // MatrixRTCDataChannelComponent(client),
+      // MatrixRtcScreenShareAnnotationComponent(client),
+      MatrixUrlPreviewComponent(client),
+      MatrixInvitationComponent(client),
+      MatrixThreadsComponent(client),
+      MatrixDirectMessagesComponent(client),
+      MatrixEventSearchComponent(client),
+      MatrixMessageEffectsComponent(client),
+      MatrixUserPresenceComponent(client),
+      MatrixAccountSwitchComponent(client),
+      MatrixRecentEmoticonComponent(client),
+      MatrixProfileComponent(client),
+      MatrixUserColorComponent(client),
+      MatrixPetNameComponent(client),
+      MatrixDonationAwardsComponent(client),
+      MatrixKeyVerificationComponent(client),
+      MatrixPollComponent(client),
+      MatrixWidgetComponent(client),
+      MatrixGifComponent(client),
+      MatrixSidebarEntriesComponent(client),
+    ];
+  }
+
+  static List<RoomComponent<MatrixClient, MatrixRoom>> getMatrixRoomComponents(
+    MatrixClient client,
+    MatrixRoom room,
+  ) {
+    return [
+      MatrixRoomEmoticonComponent(client, room),
+      MatrixReadReceiptComponent(client, room),
+      MatrixTypingIndicatorsComponent(client, room),
+      MatrixPinnedMessagesComponent(client, room),
+      if (MatrixVoipRoomComponent.isVoipRoom(room))
+        MatrixVoipRoomComponent(client, room),
+      if (MatrixPhotoAlbumRoomComponent.isPhotoAlbumRoom(room))
+        MatrixPhotoAlbumRoomComponent(client, room),
+      MatrixCalendarRoomComponent(client, room),
+      MatrixActivitiesComponent(client, room),
+    ];
+  }
+
+  static List<SpaceComponent<MatrixClient, MatrixSpace>>
+      getMatrixSpaceComponents(MatrixClient client, MatrixSpace space) {
+    return [
+      MatrixSpaceEmoticonComponent(client, space),
+      MatrixSpaceColorSchemeComponent(client, space),
+      MatrixSpaceBannerComponent(client, space)
+    ];
+  }
+}

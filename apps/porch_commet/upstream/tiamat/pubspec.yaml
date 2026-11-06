@@ -1,0 +1,46 @@
+name: tiamat
+description: A new Flutter project.
+
+publish_to: 'none'
+version: 1.0.0+1
+
+environment: 
+  sdk: '>=3.6.0 <4.0.0'
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.2
+  widgetbook_annotation: ^3.0.0
+  dropdown_button2: ^2.0.0
+  just_the_tooltip: ^0.0.12
+  path: ^1.9.0
+  dynamic_color: 
+    git: 
+      url: https://github.com/Airyzz/material-flutter-packages.git
+      path: ./packages/dynamic_color
+
+dev_dependencies:
+  build_runner:
+  widgetbook_generator: ^3.1.0
+  widgetbook:
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/placeholder/generic/
+  shaders:
+    - assets/shader/texture_coordinate.frag
+  fonts:
+    - family: EmojiFont
+      fonts: 
+        - asset: assets/font/emoji-font/NotoColorEmoji.ttf
+
+    - family: RobotoCustom
+      fonts: 
+        - asset: assets/font/roboto/Roboto-Regular.ttf
+        - asset: assets/font/roboto/Roboto-Bold.ttf
+          weight: 700
+

@@ -1,0 +1,116 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:commet/client/components/voip/voip_stream.dart';
+import 'package:commet/main.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:livekit_client/livekit_client.dart';
+
+class MatrixLivekitVoipStream implements VoipStream {
+  TrackPublication publication;
+  String userId;
+
+  AudioVisualizer? visualizer;
+
+  StreamController _onChanged = StreamController.broadcast();
+
+  @override
+  Stream<void> get onStreamChanged => _onChanged.stream;
+
+  MatrixLivekitVoipStream(this.publication, this.userId) {
+    if (publication.track case AudioTrack t) {
+      var volume = preferences.getVoipUserVolume(userId);
+      Helper.setVolume(volume, t.mediaStreamTrack);
+    }
+  }
+
+  @override
+  double audiolevel = 0.0;
+
+  void markAsSpeaker(bool isSpeaker) {
+    audiolevel = isSpeaker ? 1.0 : 0.0;
+  }
+
+  void onStreamUpdatedEvent() {
+    print("Stream updated!");
+    _onChanged.add(());
+  }
+
+  @override
+  double? get aspectRatio {
+    if (publication.dimensions == null) {
+      return null;
+    }
+    return publication.dimensions!.width.toDouble() /
+        publication.dimensions!.height.toDouble();
+  }
+
+  @override
+  Widget? buildVideoRenderer(BoxFit fit, Key key) {
+    if (publication.track is VideoTrack) {
+      return VideoTrackRenderer(publication.track as VideoTrack);
+    }
+
+    return null;
+  }
+
+  @override
+  VoipStreamDirection get direction => publication is LocalTrackPublication
+      ? VoipStreamDirection.outgoing
+      : VoipStreamDirection.incoming;
+
+  @override
+  String get label => "label";
+
+  @override
+  String get streamId => publication.sid;
+
+  @override
+  String get streamUserId => userId;
+
+  @override
+  VoipStreamType get type {
+    if (publication.track is AudioTrack && publication.name == "screenshare") {
+      return VoipStreamType.screenshareAudio;
+    }
+
+    if (publication.track is AudioTrack) {
+      return VoipStreamType.audio;
+    }
+
+    if (publication.isScreenShare) {
+      return VoipStreamType.screenshare;
+    }
+
+    return VoipStreamType.video;
+  }
+
+  @override
+  bool get isMuted => publication.track?.muted ?? false;
+
+  @override
+  // TODO: implement stats
+  String get stats => JsonEncoder.withIndent("  ").convert({
+        "is encrypted": publication.participant.isEncrypted,
+        "encryption type": publication.encryptionType.toString(),
+        "publication": publication.name
+      });
+
+  String get volumeKey =>
+      type == VoipStreamType.screenshareAudio ? "stream:${userId}" : userId;
+
+  @override
+  Future<void> setVolume(double volume) async {
+    preferences.setVoipUserVolume(volumeKey, volume);
+    if (publication.track case AudioTrack track) {
+      Helper.setVolume(volume, track.mediaStreamTrack);
+    }
+  }
+
+  @override
+  double get volume => preferences.getVoipUserVolume(volumeKey);
+
+  @override
+  String get participantId => publication.participant.identity;
+}

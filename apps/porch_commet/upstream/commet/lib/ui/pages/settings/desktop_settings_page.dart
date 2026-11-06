@@ -1,0 +1,288 @@
+import 'package:commet/client/components/donation_awards/donation_awards_component.dart';
+import 'package:commet/ui/atoms/adaptive_context_menu.dart';
+import 'package:commet/ui/atoms/scaled_safe_area.dart';
+import 'package:commet/ui/navigation/adaptive_dialog.dart';
+import 'package:commet/ui/pages/settings/donation_rewards_confirmation.dart';
+import 'package:commet/ui/pages/settings/settings_button.dart';
+import 'package:commet/ui/pages/settings/settings_category.dart';
+import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart' as m;
+import 'package:intl/intl.dart';
+
+import 'package:tiamat/tiamat.dart';
+import 'package:tiamat/tiamat.dart' as tiamat;
+
+class DesktopSettingsPage extends StatefulWidget {
+  const DesktopSettingsPage(
+      {required this.settings,
+      this.buttons,
+      this.onDonateButtonTapped,
+      this.showDonateButton = false,
+      super.key});
+  final List<SettingsCategory> settings;
+  final List<SettingsButton>? buttons;
+  final bool showDonateButton;
+  final Function(BuildContext context)? onDonateButtonTapped;
+  @override
+  State<DesktopSettingsPage> createState() => DesktopSettingsPageState();
+}
+
+class DesktopSettingsPageState extends State<DesktopSettingsPage> {
+  late List<SettingsCategory> categories;
+  int selectedCategoryIndex = 0;
+  int selectedTabIndex = 0;
+
+  static ValueKey backButtonKey =
+      const ValueKey("DESKTOP_SETTINGS_PAGE_BACK_BUTTON");
+
+  @override
+  void initState() {
+    categories = widget.settings;
+    super.initState();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return m.Material(
+      color: m.Theme.of(context).colorScheme.surface,
+      child: Foundation(
+        child: Row(
+          mainAxisSize: MainAxisSize.max,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            tabSelector(context),
+            Expanded(
+              child: categories[selectedCategoryIndex]
+                      .tabs[selectedTabIndex]
+                      .makeScrollable
+                  ? SingleChildScrollView(child: buildContent())
+                  : buildContent(),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget buildContent() {
+    return Tile(
+      caulkPadTop: true,
+      caulkPadBottom: true,
+      caulkClipTopLeft: true,
+      caulkClipBottomLeft: true,
+      key: ValueKey(selectedTabIndex),
+      child: ScaledSafeArea(
+          child: selectedCategoryIndex < categories.length &&
+                  selectedTabIndex <
+                      categories[selectedCategoryIndex].tabs.length
+              ? settingsTab(categories[selectedCategoryIndex]
+                  .tabs[selectedTabIndex]
+                  .pageBuilder)
+              : Container()),
+    );
+  }
+
+  Widget tabSelector(BuildContext context) {
+    return Tile.surfaceContainer(
+      caulkPadRight: true,
+      caulkPadTop: true,
+      caulkPadBottom: true,
+      caulkClipTopRight: true,
+      caulkClipBottomRight: true,
+      caulkBorderRight: true,
+      child: ScaledSafeArea(
+        child: SizedBox(
+          width: 240,
+          child: Column(
+            children: [
+              Flexible(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: CircleButton(
+                              key: backButtonKey,
+                              radius: 25,
+                              icon: m.Icons.arrow_back,
+                              onPressed: () => Navigator.of(context).pop(),
+                            )),
+                      ),
+                      Flexible(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+                          child: ListView(children: [
+                            ListView.builder(
+                              physics: const NeverScrollableScrollPhysics(),
+                              shrinkWrap: true,
+                              itemCount: categories.length,
+                              itemBuilder: (context, categoryIndex) {
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    if (categoryIndex != 0)
+                                      const tiamat.Seperator(),
+                                    if (categories[categoryIndex].title != null)
+                                      tiamat.Text.labelLow(
+                                          categories[categoryIndex].title!),
+                                    tabListBuilder(categoryIndex)
+                                  ],
+                                );
+                              },
+                            ),
+                            if (widget.buttons != null) const Seperator(),
+                            if (widget.buttons != null)
+                              ListView.builder(
+                                physics: const NeverScrollableScrollPhysics(),
+                                shrinkWrap: true,
+                                itemCount: widget.buttons!.length,
+                                itemBuilder: (context, index) {
+                                  return button(
+                                      label: widget.buttons![index].label,
+                                      icon: widget.buttons![index].icon,
+                                      onTap: widget.buttons![index].onPress,
+                                      color: widget.buttons![index].color);
+                                },
+                              ),
+                          ]),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (widget.showDonateButton)
+                buildDonateButton(context,
+                    onTap: () => widget.onDonateButtonTapped?.call(context))
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static String get promptDonate => Intl.message("Donate",
+      name: "promptDonate", desc: "Prompt the user to donate to the project");
+
+  static String get promptDonationsRefreshAwards => Intl.message(
+      "Refresh Awards",
+      name: "promptDonationsRefreshAwards",
+      desc:
+          "Prompt the user to refresh any awards they may have received for donating to the project");
+
+  static Widget buildDonateButton(BuildContext context, {Function()? onTap}) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(2, 0, 2, 2),
+      child: AdaptiveContextMenu(
+        items: [
+          ContextMenuItem(
+              text: promptDonationsRefreshAwards,
+              icon: m.Icons.refresh,
+              onPressed: () async {
+                var client = await AdaptiveDialog.pickClient(context);
+
+                if (client != null) {
+                  var identifier = await client
+                      .getComponent<DonationAwardsComponent>()
+                      ?.getClientSecret();
+                  if (identifier != null) {
+                    AdaptiveDialog.show(
+                      context,
+                      builder: (context) {
+                        return DonationRewardsConfirmation(
+                          client: client,
+                          identifier: identifier,
+                          didOpenDonationWindow: false,
+                          since: null,
+                        );
+                      },
+                    );
+                  }
+                }
+              }),
+        ],
+        child: m.Material(
+          clipBehavior: Clip.antiAlias,
+          color: m.ColorScheme.of(context).surfaceContainerLow,
+          borderRadius: BorderRadius.circular(8),
+          child: m.InkWell(
+            onTap: onTap,
+            child: SizedBox(
+              width: double.infinity,
+              child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                  child: Row(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: m.Icon(
+                          m.Icons.favorite,
+                          color: m.ColorScheme.of(context).onSurfaceVariant,
+                        ),
+                      ),
+                      tiamat.Text(
+                        promptDonate,
+                        color: m.ColorScheme.of(context).onSurface,
+                      ),
+                    ],
+                  )),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  ListView tabListBuilder(int categoryIndex) {
+    return ListView.builder(
+      shrinkWrap: true,
+      itemBuilder: (context, tabIndex) {
+        return button(
+            label: categories[categoryIndex].tabs[tabIndex].label,
+            icon: categories[categoryIndex].tabs[tabIndex].icon,
+            highlighted: categoryIndex == selectedCategoryIndex &&
+                tabIndex == selectedTabIndex,
+            onTap: () {
+              setState(() {
+                selectedCategoryIndex = categoryIndex;
+                selectedTabIndex = tabIndex;
+              });
+            });
+      },
+      itemCount: categories[categoryIndex].tabs.length,
+    );
+  }
+
+  Widget button(
+      {required String label,
+      IconData? icon,
+      bool highlighted = false,
+      Color? color,
+      Function()? onTap}) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 2, 0, 2),
+      child: SizedBox(
+          height: 40,
+          width: 200,
+          child: TextButton(
+            label,
+            icon: icon,
+            highlighted: highlighted,
+            onTap: onTap,
+            textColor: color,
+            iconColor: color,
+          )),
+    );
+  }
+
+  Widget settingsTab(Widget Function(BuildContext context) builder) {
+    return Padding(
+      padding: const EdgeInsets.all(20.0),
+      child: builder(context),
+    );
+  }
+}
