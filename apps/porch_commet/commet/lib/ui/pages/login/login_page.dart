@@ -177,9 +177,15 @@ class LoginPageState extends State<LoginPage> {
       isServerValid = false;
     });
 
-    final host = input.trim();
+    final host = input.trim().replaceFirst(RegExp(r'^https?://'), '');
     final local = host.startsWith('localhost') || host.startsWith('127.0.0.1');
-    final uri = local ? Uri.http(host) : Uri.https(host);
+    final Uri uri;
+    try {
+      uri = local ? Uri.parse('http://$host') : Uri.parse('https://$host');
+    } on FormatException {
+      if (mounted) setState(() => loadingServerInfo = false);
+      return;
+    }
     var result = await loginClient!.setHomeserver(uri);
 
     setState(() {

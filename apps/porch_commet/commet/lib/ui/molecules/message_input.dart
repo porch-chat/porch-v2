@@ -1075,7 +1075,7 @@ class MessageInputState extends State<MessageInput> {
         .getComponent<RecentEmoticonComponent>()
         ?.getRecentTypedEmoticon(widget.room);
 
-    var availableEmoji = widget.availibleEmoticons!.toList();
+    var availableEmoji = (widget.availibleEmoticons ?? const <EmoticonPack>[]).toList();
 
     if (recent != null && recent.isNotEmpty) {
       availableEmoji.insert(

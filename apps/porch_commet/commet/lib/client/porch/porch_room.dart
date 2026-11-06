@@ -128,8 +128,10 @@ class PorchRoom extends Room {
       throw UnsupportedError('Reactions are not supported yet');
   @override
   Future<List<ProcessedAttachment>> processAttachments(
-          List<PendingFileAttachment> attachments) async =>
-      throw UnsupportedError('Attachments are not supported yet');
+          List<PendingFileAttachment> attachments) async {
+    if (attachments.isEmpty) return const [];
+    throw UnsupportedError('Attachments are not supported yet');
+  }
   @override
   List<Member> membersList() => porch.membersOf(this);
   @override
@@ -138,7 +140,7 @@ class PorchRoom extends Room {
   @override
   List<(Member, Role)> importantMembers() => const [];
   @override
-  Role getMemberRole(String identifier) => throw UnsupportedError('No roles');
+  Role getMemberRole(String identifier) => const PorchRole();
   @override
   bool get isMembersListComplete => true;
   @override
@@ -218,4 +220,13 @@ class PorchRoom extends Room {
   Future<void> markAsRead() async {}
   @override
   String? get lastRead => lastReadValue;
+}
+
+/// Porch has no per-room role display yet; every member shows as a plain member.
+class PorchRole implements Role {
+  const PorchRole();
+  @override
+  String get name => 'Member';
+  @override
+  IconData get icon => Icons.person;
 }

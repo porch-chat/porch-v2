@@ -162,3 +162,38 @@ jobs:
             apps/porch_flutter/build/windows/x64/runner/Release/
             apps/porch_flutter/assets/OFL-Manrope.txt
           retention-days: 7
+
+  commet-linux:
+    name: Commet fork (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Rust toolchain
+        run: rustup show active-toolchain
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: commet-bridge
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.8'
+          channel: stable
+          cache: true
+      - name: Linux build dependencies
+        run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev libpulse-dev libsecret-1-dev libmpv-dev libayatana-appindicator3-dev
+      - name: Build Porch native library
+        run: cargo build -p porch-flutter --locked
+      - working-directory: apps/porch_commet/commet
+        run: |
+          flutter pub get
+          dart run scripts/codegen.dart
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib/client/porch
+          flutter test unit_test/porch_adapter_test.dart
+          flutter build linux --debug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: porch-commet-linux-x86_64-debug
+          path: |
+            apps/porch_commet/commet/build/linux/x64/debug/bundle/
+            apps/porch_commet/commet/LICENSE
+            apps/porch_commet/NOTICE-COMMET.md
+          retention-days: 7

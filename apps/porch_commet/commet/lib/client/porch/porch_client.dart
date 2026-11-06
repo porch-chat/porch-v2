@@ -5,8 +5,10 @@ import 'package:commet/client/client.dart';
 import 'package:commet/client/components/component.dart';
 import 'package:commet/client/components/direct_messages/direct_message_component.dart';
 import 'package:commet/client/components/room_component.dart';
+import 'package:commet/client/components/sidebar_component/sidebar_entries_component.dart';
 import 'package:commet/client/member.dart';
 import 'package:commet/client/porch/porch_models.dart';
+import 'package:commet/client/porch/porch_profile.dart';
 import 'package:commet/client/components/profile/profile_component.dart';
 import 'package:commet/client/porch/porch_room.dart';
 import 'package:commet/client/porch/porch_space.dart';
@@ -32,6 +34,7 @@ class PorchPasswordLogin implements PasswordLoginFlow {
 
 class PorchClient extends Client implements DirectMessagesComponent<PorchClient> {
   final PorchBridge bridge;
+  late final PorchProfileComponent _profile = PorchProfileComponent(this);
   final String cacheDir;
   String origin = 'https://api.porch.chat';
   StreamSubscription<Json>? _sub;
@@ -120,6 +123,17 @@ class PorchClient extends Client implements DirectMessagesComponent<PorchClient>
     return (true, <LoginFlow>[PorchPasswordLogin()]);
   }
 
+  late final _sidebar = PorchSidebar(this);
+
+  static String _loginMessage(String raw) {
+    if (raw.contains('401')) return 'Wrong username or password.';
+    if (raw.contains('429')) return 'Too many attempts. Try again later.';
+    if (raw.contains('Connect') || raw.contains('error sending request')) {
+      return 'Could not reach the server.';
+    }
+    return 'Sign in failed.';
+  }
+
   Future<LoginResult> signIn(String user, String pass) async {
     await init(false);
     _login = Completer<LoginResult>();
@@ -128,7 +142,7 @@ class PorchClient extends Client implements DirectMessagesComponent<PorchClient>
       await bridge.login(origin, user, pass, cacheDir);
     } catch (e) {
       _login = null;
-      return LoginResultError('$e');
+      return LoginResultError(_loginMessage('$e'));
     }
     return _login!.future.timeout(const Duration(seconds: 20),
         onTimeout: () => LoginResultError('Sign in timed out'));
@@ -213,6 +227,8 @@ class PorchClient extends Client implements DirectMessagesComponent<PorchClient>
   @override
   T? getComponent<T extends Component>() {
     if (this is T) return this as T;
+    if (_sidebar is T) return _sidebar as T;
+    if (_profile is T) return _profile as T;
     return null;
   }
 
@@ -268,8 +284,7 @@ class PorchClient extends Client implements DirectMessagesComponent<PorchClient>
     _loggedIn = true;
     self ??= PorchProfile(uid, user['username'] as String);
     final conn = '${s['connection']}'.toLowerCase();
-    _status.add(ClientConnectionStatusUpdate(conn.contains('connected') &&
-            !conn.contains('dis')
+    _status.add(ClientConnectionStatusUpdate(conn == 'online'
         ? ClientConnectionStatus.connected
         : ClientConnectionStatus.connecting));
     _syncCommunities(s);
@@ -436,4 +451,29 @@ class PorchProfile implements Profile {
   Color get defaultColor => porchHashColor(identifier);
   @override
   String get source => 'porch';
+}
+
+/// Communities in server order. Folders are a Matrix account-data feature and are unsupported.
+class PorchSidebar implements SidebarEntriesComponent<PorchClient> {
+  @override
+  final PorchClient client;
+  PorchSidebar(this.client);
+
+  @override
+  List<SidebarEntry> getEntries() {
+    final spaces = client.spaces;
+    return [
+      for (var i = 0; i < spaces.length; i++)
+        SpaceSidebarEntry(spaces[i], order: i.toString().padLeft(6, '0'))
+    ];
+  }
+
+  @override
+  String createFolder(Space space) => throw UnsupportedError('Folders');
+  @override
+  void save() {}
+  @override
+  addToFolder(Space space, String folderId, int index) {}
+  @override
+  removeFromFolder(Space space, String folderId) {}
 }

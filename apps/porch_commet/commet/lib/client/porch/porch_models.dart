@@ -131,7 +131,8 @@ class PorchMessageEvent extends TimelineEventMessage
   @override
   List<Attachment>? get attachments => null;
   @override
-  Widget? buildFormattedContent({timeline}) => null;
+  Widget? buildFormattedContent({timeline}) =>
+      removed ? null : SelectableText(text);
   @override
   bool isEdited(timeline) => false;
   @override
