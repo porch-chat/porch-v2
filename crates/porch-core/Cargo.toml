@@ -15,6 +15,7 @@ sqlx = { workspace = true, features = ["sqlite"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
 rand = "0.8"
 sha2 = "0.10"
+image = {version = "0.25.10", default-features = false, features = ["png"]}
 
 [dev-dependencies]
 proptest = "1.12"

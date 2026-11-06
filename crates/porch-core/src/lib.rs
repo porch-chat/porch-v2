@@ -2,6 +2,7 @@
 mod cache;
 mod engine;
 mod gateway;
+mod media;
 mod transfers;
 mod transport;
 pub use cache::{Cache, PendingSend, RemovalNotice, RemovedLocalSend, SendState};

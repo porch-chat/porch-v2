@@ -196,6 +196,32 @@ async fn postgres_resumable_transfers() {
             .len(),
         1
     );
+    let attached = &page.messages[0];
+    let destination = dir.path().join("download.bin");
+    engine
+        .download_attachment(dm.id, attached.id, &ready.status.id, &destination)
+        .await
+        .unwrap();
+    assert_eq!(std::fs::read(&destination).unwrap(), payload);
+    assert!(
+        engine
+            .download_attachment(dm.id, attached.id, &ready.status.id, &destination)
+            .await
+            .is_err()
+    );
+    assert_eq!(std::fs::read(&destination).unwrap(), payload);
+    assert!(
+        engine
+            .download_attachment(dm.id, attached.id, "../escape", dir.path().join("bad"))
+            .await
+            .is_err()
+    );
+    assert!(
+        engine
+            .attachment_preview(dm.id, attached.id, &ready.status.id)
+            .await
+            .is_err()
+    );
     let pending = engine.begin_upload(dm.id, &source).await.unwrap();
     std::fs::write(&source, b"changed source").unwrap();
     assert!(matches!(

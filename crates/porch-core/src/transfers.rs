@@ -76,7 +76,7 @@ async fn inspect(path: PathBuf) -> Result<CreateUpload> {
     .map_err(|_| Error::Storage)?
 }
 impl Engine {
-    async fn transfer_result<T>(&self, result: Result<T>) -> Result<T> {
+    pub(crate) async fn transfer_result<T>(&self, result: Result<T>) -> Result<T> {
         if result.as_ref().err().is_some_and(Error::unauthorized) {
             self.expire().await?;
         }
