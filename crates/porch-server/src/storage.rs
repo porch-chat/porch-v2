@@ -36,13 +36,13 @@ impl LocalStorage {
             return Err(invalid());
         }
         if !root.exists() {
-            let mut builder = fs::DirBuilder::new();
             #[cfg(unix)]
             {
                 use std::os::unix::fs::DirBuilderExt;
-                builder.mode(0o700);
+                fs::DirBuilder::new().mode(0o700).create(root)?;
             }
-            builder.create(root)?;
+            #[cfg(not(unix))]
+            fs::create_dir(root)?;
         }
         let meta = fs::symlink_metadata(root)?;
         if !meta.is_dir() || meta.file_type().is_symlink() {
