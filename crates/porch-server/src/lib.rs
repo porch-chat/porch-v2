@@ -1,3 +1,4 @@
+pub mod gateway;
 pub mod identity;
 use axum::{Json, Router, routing::get};
 use porch_protocol::HealthResponse;

@@ -102,6 +102,9 @@ fn run() -> Result<()> {
         return Err("incorrect number of arguments".into());
     }
     match command {
+        "gateway" => {
+            gateway(&cli.base)?;
+        }
         "register" => {
             let body = RegisterRequest {
                 username: env::var("PORCH_USERNAME")?,
@@ -152,4 +155,52 @@ fn run() -> Result<()> {
         _ => return Err("unknown command".into()),
     }
     Ok(())
+}
+
+fn gateway(base: &str) -> Result<()> {
+    use futures_util::{SinkExt, StreamExt};
+    use porch_protocol::{GatewayClient, GatewayServer, PROTOCOL_VERSION, ResumeCursor};
+    use tokio_tungstenite::tungstenite::{Message, client::IntoClientRequest};
+    let url = format!("{}/gateway", base.replacen("http", "ws", 1));
+    let mut request = url.into_client_request()?;
+    request.headers_mut().insert(
+        "authorization",
+        format!("Bearer {}", env::var("PORCH_TOKEN")?).parse()?,
+    );
+    let resume = match (env::var("PORCH_STREAM"), env::var("PORCH_SEQUENCE")) {
+        (Ok(stream), Ok(sequence)) => Some(ResumeCursor {
+            stream,
+            sequence: sequence.parse()?,
+        }),
+        (Err(_), Err(_)) => None,
+        _ => return Err("set both PORCH_STREAM and PORCH_SEQUENCE to resume".into()),
+    };
+    tokio::runtime::Runtime::new()?.block_on(async {
+        let (mut socket, _) = tokio_tungstenite::connect_async(request).await?;
+        socket.send(Message::Text(serde_json::to_string(&GatewayClient::Identify {version:PROTOCOL_VERSION, resume})?.into())).await?;
+        let mut interval = tokio::time::interval(Duration::from_secs(15));
+        let mut nonce = 0;
+        loop {
+            tokio::select! {
+                _ = interval.tick() => {
+                    nonce += 1;
+                    socket.send(Message::Text(serde_json::to_string(&GatewayClient::Heartbeat {nonce})?.into())).await?;
+                },
+                message = socket.next() => match message {
+                    Some(Ok(Message::Text(text))) => {
+                        let event: GatewayServer = serde_json::from_str(&text)?;
+                        if let GatewayServer::Hello {heartbeat_interval_ms,..} = event {
+                            interval = tokio::time::interval(Duration::from_millis(heartbeat_interval_ms.max(1)));
+                        }
+                        print_json(&event)?;
+                        if matches!(event,GatewayServer::Error {..}) { return Err("gateway rejected connection".into()); }
+                    },
+                    Some(Ok(Message::Ping(payload))) => socket.send(Message::Pong(payload)).await?,
+                    Some(Ok(Message::Close(_))) | None => return Err("gateway disconnected".into()),
+                    Some(Err(_)) => return Err("gateway transport failed".into()),
+                    _ => {},
+                }
+            }
+        }
+    })
 }

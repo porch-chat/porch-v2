@@ -34,7 +34,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     tracing::info!(address = %listener.local_addr()?, "Porch listening");
     axum::serve(
         listener,
-        router().merge(porch_server::identity::routes(state)),
+        router()
+            .merge(porch_server::identity::routes(state.clone()))
+            .merge(porch_server::gateway::Gateway::new(state).routes()),
     )
     .with_graceful_shutdown(async {
         if let Err(error) = tokio::signal::ctrl_c().await {

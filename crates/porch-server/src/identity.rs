@@ -260,7 +260,10 @@ async fn login(
     Ok(Json(new_session(&mut conn, user(&row)).await?))
 }
 
-async fn authenticate(state: &IdentityState, headers: &HeaderMap) -> Result<(User, i64), ApiError> {
+pub(crate) async fn authenticate(
+    state: &IdentityState,
+    headers: &HeaderMap,
+) -> Result<(User, i64), ApiError> {
     let token = headers
         .get("authorization")
         .and_then(|h| h.to_str().ok())

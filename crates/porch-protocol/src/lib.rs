@@ -99,3 +99,87 @@ pub enum ErrorCode {
 pub struct ErrorResponse {
     pub code: ErrorCode,
 }
+
+/// Gateway v1. Controls carry no sequence; durable dispatch envelopes do.
+/// Credentials stay in the upgrade Authorization header, never URLs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
+pub enum GatewayClient {
+    Identify {
+        version: u16,
+        resume: Option<ResumeCursor>,
+    },
+    Heartbeat {
+        nonce: u64,
+    },
+    Presence {
+        status: PresenceStatus,
+    },
+    /// Phase 2 has only a platform lobby, not arbitrary channel subscriptions.
+    Typing,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResumeCursor {
+    pub stream: String,
+    pub sequence: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PresenceStatus {
+    Online,
+    Idle,
+    Dnd,
+    Offline,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PresenceEntry {
+    pub user_id: i64,
+    pub status: PresenceStatus,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum GatewayEvent {
+    Presence {
+        entry: PresenceEntry,
+    },
+    /// Ephemeral. Not replayed; expires after five seconds.
+    Typing {
+        user_id: i64,
+        expires_in_ms: u64,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EventEnvelope {
+    pub version: u16,
+    pub sequence: u64,
+    pub event: GatewayEvent,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "op", rename_all = "snake_case")]
+pub enum GatewayServer {
+    Hello {
+        version: u16,
+        heartbeat_interval_ms: u64,
+        heartbeat_timeout_ms: u64,
+    },
+    Ready {
+        cursor: ResumeCursor,
+        resumed: bool,
+        presence: Vec<PresenceEntry>,
+    },
+    Dispatch {
+        envelope: EventEnvelope,
+    },
+    HeartbeatAck {
+        nonce: u64,
+    },
+    Error {
+        code: ErrorCode,
+    },
+}
