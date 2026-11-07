@@ -1,7 +1,6 @@
 import 'dart:ui';
 
 import 'package:commet/client/auth.dart';
-import 'package:commet/config/global_config.dart';
 import 'package:commet/ui/atoms/shader/star_trails.dart';
 import 'package:commet/ui/navigation/navigation_utils.dart';
 import 'package:commet/ui/pages/settings/app_settings_page.dart';
@@ -21,17 +20,14 @@ class LoginPageView extends StatefulWidget {
       this.progress,
       this.flows,
       required this.isLoggingIn,
-      this.homeserverChecked,
       this.doSsoLogin,
       this.doPasswordLogin,
       this.loadingServerInfo = false,
       this.isServerValid = false,
       this.hasSsoSupport = false,
-      this.hasPasswordSupport = false,
-      this.updateHomeserver});
+      this.hasPasswordSupport = false});
   final bool canNavigateBack;
   final bool isLoggingIn;
-  final bool? homeserverChecked;
   final double? progress;
   final List<LoginFlow>? flows;
   final bool loadingServerInfo;
@@ -43,22 +39,13 @@ class LoginPageView extends StatefulWidget {
           PasswordLoginFlow flow, String username, String password)?
       doPasswordLogin;
 
-  final Function(String)? updateHomeserver;
-
   @override
   State<LoginPageView> createState() => _LoginPageViewState();
 }
 
 class _LoginPageViewState extends State<LoginPageView> {
-  final TextEditingController _homeserverTextField = TextEditingController(
-    text: GlobalConfig.defaultHomeserver,
-  );
   final TextEditingController _usernameTextField = TextEditingController();
   final TextEditingController _passwordTextField = TextEditingController();
-
-  String get promptHomeserver => Intl.message("Homeserver",
-      name: "promptHomeserver",
-      desc: "Placeholder text for homeserver field on login form");
 
   String get promptUsername => Intl.message("Username",
       name: "promptUsername",
@@ -71,16 +58,6 @@ class _LoginPageViewState extends State<LoginPageView> {
   String get promptSubmitLogin => Intl.message("Login",
       name: "promptSubmitLogin",
       desc: "Prompt to submit the username and password, and attempt to login");
-
-  @override
-  void initState() {
-    if (_homeserverTextField.text != "") {
-      WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
-        _onHomeserverTextUpdated();
-      });
-    }
-    super.initState();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -207,8 +184,6 @@ class _LoginPageViewState extends State<LoginPageView> {
           ],
         ),
       ),
-      const SizedBox(height: 16),
-      homeserverEntry(),
       const SizedBox(height: 16),
       if (widget.hasPasswordSupport) usenamePasswordLoginInputs(),
       if (widget.hasSsoSupport)
@@ -345,39 +320,6 @@ class _LoginPageViewState extends State<LoginPageView> {
     );
   }
 
-  Widget homeserverEntry() {
-    return TextField(
-      autocorrect: false,
-      controller: _homeserverTextField,
-      readOnly: widget.isLoggingIn,
-      onChanged: widget.updateHomeserver,
-      keyboardType: TextInputType.url,
-      inputFormatters: [FilteringTextInputFormatter.deny(RegExp("[ ]"))],
-      decoration: InputDecoration(
-          prefixText: 'https://',
-          border: const OutlineInputBorder(),
-          labelText: promptHomeserver,
-          suffix: homeserverEntrySuffix()),
-    );
-  }
-
-  Widget homeserverEntrySuffix() {
-    if (widget.loadingServerInfo) {
-      return const SizedBox(
-          width: 15,
-          height: 15,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-          ));
-    }
-
-    return Icon(
-      widget.isServerValid ? Icons.check : Icons.close,
-      size: 15,
-      color: widget.isServerValid ? Colors.greenAccent : Colors.redAccent,
-    );
-  }
-
   SizedBox appIcon(BuildContext context) {
     return SizedBox(
       width: 50,
@@ -387,11 +329,5 @@ class _LoginPageViewState extends State<LoginPageView> {
         theme: SvgTheme(currentColor: Theme.of(context).colorScheme.onSurface),
       ),
     );
-  }
-
-  void _onHomeserverTextUpdated() {
-    if (widget.updateHomeserver != null) {
-      widget.updateHomeserver?.call(_homeserverTextField.text);
-    }
   }
 }

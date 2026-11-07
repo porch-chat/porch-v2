@@ -3,11 +3,11 @@ import 'dart:async';
 import 'package:commet/client/auth.dart';
 import 'package:commet/client/client.dart';
 import 'package:commet/client/porch/porch_client.dart';
+import 'package:commet/config/global_config.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:porch_flutter/bridge.dart';
 import 'package:commet/main.dart';
 import 'package:commet/ui/pages/login/login_page_view.dart';
-import 'package:commet/utils/debounce.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:commet/ui/navigation/adaptive_dialog.dart';
@@ -47,10 +47,6 @@ class LoginPageState extends State<LoginPage> {
   List<LoginFlow>? loginFlows;
   Client? loginClient;
 
-  final Debouncer homeserverUpdateDebouncer = Debouncer(
-    delay: const Duration(seconds: 1),
-  );
-
   bool loadingServerInfo = false;
   bool isServerValid = false;
   bool isLoggingIn = false;
@@ -64,6 +60,7 @@ class LoginPageState extends State<LoginPage> {
       progressSubscription = loginClient!.connectionStatusChanged.stream.listen(
         onLoginProgressChanged,
       );
+      useConfiguredServer();
     });
 
     super.initState();
@@ -74,14 +71,6 @@ class LoginPageState extends State<LoginPage> {
     return LoginPageView(
       canNavigateBack: widget.canNavigateBack,
       progress: progress,
-      updateHomeserver: (value) {
-        setState(() {
-          loginFlows = null;
-          isServerValid = false;
-          loadingServerInfo = true;
-        });
-        homeserverUpdateDebouncer.run(() => updateHomeserver(value));
-      },
       flows: loginFlows,
       doSsoLogin: doSsoLogin,
       doPasswordLogin: doPasswordLogin,
@@ -168,26 +157,11 @@ class LoginPageState extends State<LoginPage> {
     });
   }
 
-  Future<void> updateHomeserver(String input) async {
-    if (loginClient == null) return;
-
-    setState(() {
-      loginFlows = null;
-      loadingServerInfo = true;
-      isServerValid = false;
-    });
-
-    final host = input.trim().replaceFirst(RegExp(r'^https?://'), '');
-    final local = host.startsWith('localhost') || host.startsWith('127.0.0.1');
-    final Uri uri;
-    try {
-      uri = local ? Uri.parse('http://$host') : Uri.parse('https://$host');
-    } on FormatException {
-      if (mounted) setState(() => loadingServerInfo = false);
-      return;
-    }
-    var result = await loginClient!.setHomeserver(uri);
-
+  Future<void> useConfiguredServer() async {
+    final uri = PorchClient.parseServer(GlobalConfig.porchServer);
+    if (loginClient == null || uri == null) return;
+    final result = await loginClient!.setHomeserver(uri);
+    if (!mounted) return;
     setState(() {
       loadingServerInfo = false;
       isServerValid = result.$1;

@@ -32,7 +32,8 @@ class PorchPasswordLogin implements PasswordLoginFlow {
       (client as PorchClient).signIn(username ?? '', password ?? '');
 }
 
-class PorchClient extends Client implements DirectMessagesComponent<PorchClient> {
+class PorchClient extends Client
+    implements DirectMessagesComponent<PorchClient> {
   final PorchBridge bridge;
   late final PorchProfileComponent _profile = PorchProfileComponent(this);
   final String cacheDir;
@@ -71,7 +72,8 @@ class PorchClient extends Client implements DirectMessagesComponent<PorchClient>
   }
 
   String userName(String id) => _usernames[id] ?? id;
-  Iterable<String> memberIdsOf(int community) => _members[community] ?? const [];
+  Iterable<String> memberIdsOf(int community) =>
+      _members[community] ?? const [];
   PorchPeer peerOf(String id) =>
       _peers.putIfAbsent(id, () => PorchPeer(id, userName(id)));
   List<Member> membersOf(PorchRoom r) =>
@@ -115,6 +117,19 @@ class PorchClient extends Client implements DirectMessagesComponent<PorchClient>
   Future<void> init(bool loadingFromCache,
       {bool isBackgroundService = false}) async {
     _sub ??= bridge.snapshots().listen(_onSnapshot);
+  }
+
+  /// Normalizes a server setting to a base Uri. Bare hosts get https, except
+  /// localhost / loopback which get http. Returns null if unparseable.
+  static Uri? parseServer(String input) {
+    final host = input.trim().replaceFirst(RegExp(r'^https?://'), '');
+    if (host.isEmpty) return null;
+    final local = host.startsWith('localhost') || host.startsWith('127.0.0.1');
+    try {
+      return Uri.parse(local ? 'http://$host' : 'https://$host');
+    } on FormatException {
+      return null;
+    }
   }
 
   @override
@@ -190,11 +205,13 @@ class PorchClient extends Client implements DirectMessagesComponent<PorchClient>
     return null;
   }
 
-  Never _no(String what) => throw UnsupportedError('$what is not supported yet');
+  Never _no(String what) =>
+      throw UnsupportedError('$what is not supported yet');
   @override
   Future<Room> createRoom(CreateRoomArgs args) async => _no('Creating rooms');
   @override
-  Future<Space> createSpace(CreateRoomArgs args) async => _no('Creating communities');
+  Future<Space> createSpace(CreateRoomArgs args) async =>
+      _no('Creating communities');
   @override
   Future<Space> joinSpace(String address) async => _no('Joining by address');
   @override
@@ -210,7 +227,8 @@ class PorchClient extends Client implements DirectMessagesComponent<PorchClient>
   @override
   Future<RoomPreview?> getRoomPreview(String address) async => null;
   @override
-  Future<void> setAvatar(Uint8List bytes, String mimeType) async => _no('Avatars');
+  Future<void> setAvatar(Uint8List bytes, String mimeType) async =>
+      _no('Avatars');
   @override
   Future<void> setDisplayName(String name) async => _no('Renaming');
   @override
@@ -260,7 +278,8 @@ class PorchClient extends Client implements DirectMessagesComponent<PorchClient>
   }
 
   @override
-  Future<Room?> createDirectMessage(String userId) async => _no('Creating direct messages');
+  Future<Room?> createDirectMessage(String userId) async =>
+      _no('Creating direct messages');
 
   Future<void> select(PorchRoom room) async {
     selectedId = room.headId;
@@ -275,7 +294,8 @@ class PorchClient extends Client implements DirectMessagesComponent<PorchClient>
       if (_login != null && !_login!.isCompleted && err != null) {
         _login!.complete(LoginResultError('$err'));
       }
-      _status.add(ClientConnectionStatusUpdate(ClientConnectionStatus.disconnected));
+      _status.add(
+          ClientConnectionStatusUpdate(ClientConnectionStatus.disconnected));
       return;
     }
     final uid = '${user['id']}';
@@ -294,10 +314,8 @@ class PorchClient extends Client implements DirectMessagesComponent<PorchClient>
       final t = r.porchTimeline;
       if (t != null && r.headId == sel) {
         final before = t.events.length;
-        t.apply(
-            ((s['messages'] as List?) ?? const []).cast<Json>(),
-            ((s['pending'] as List?) ?? const []).cast<Json>(),
-            uid);
+        t.apply(((s['messages'] as List?) ?? const []).cast<Json>(),
+            ((s['pending'] as List?) ?? const []).cast<Json>(), uid);
         if (t.events.length > before && t.events.isNotEmpty) {
           _onTimeline.add((r, t.events.first));
         }
@@ -326,9 +344,9 @@ class PorchClient extends Client implements DirectMessagesComponent<PorchClient>
           _onPeerAdded.add(p);
         }
       }
-      var space = _spaces.cast<PorchSpace?>().firstWhere(
-          (x) => x!.communityId == id,
-          orElse: () => null);
+      var space = _spaces
+          .cast<PorchSpace?>()
+          .firstWhere((x) => x!.communityId == id, orElse: () => null);
       var isNew = false;
       if (space == null) {
         space = PorchSpace(this, id, c['name'] as String);
@@ -339,9 +357,11 @@ class PorchClient extends Client implements DirectMessagesComponent<PorchClient>
         space.changed();
       }
       keep.add(space.identifier);
-      space.canSend = ((entry['permissions'] as int? ?? 0) & porchSendMessages) != 0;
+      space.canSend =
+          ((entry['permissions'] as int? ?? 0) & porchSendMessages) != 0;
       final next = <PorchRoom>[];
-      for (final ch in ((entry['channels'] as List?) ?? const []).cast<Json>()) {
+      for (final ch
+          in ((entry['channels'] as List?) ?? const []).cast<Json>()) {
         final rid = 'ch${ch['id']}';
         var room = _roomMap[rid];
         final voice = ch['kind'] == 'voice';
@@ -390,14 +410,13 @@ class PorchClient extends Client implements DirectMessagesComponent<PorchClient>
         final parts = ((h['participants'] as List?) ?? const [])
             .map((e) => '$e')
             .toList();
-        final name = parts
-            .where((p) => p != selfId)
-            .map(userName)
-            .join(', ');
+        final name = parts.where((p) => p != selfId).map(userName).join(', ');
         if (room == null) {
           room = PorchRoom(this,
               identifier: rid,
-              name: name.isEmpty ? (h['name'] as String? ?? 'Direct message') : name,
+              name: name.isEmpty
+                  ? (h['name'] as String? ?? 'Direct message')
+                  : name,
               headId: hid,
               participants: parts);
           _roomMap[rid] = room;

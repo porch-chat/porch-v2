@@ -6,9 +6,12 @@ import 'package:flutter/services.dart';
 class GlobalConfig {
   static late Map<String, dynamic> data;
 
-  static String get defaultHomeserver {
-    return "api.porch.chat";
-  }
+  /// Single production Porch server. Not user-editable; override only at
+  /// build time with --dart-define=PORCH_SERVER=<url> (dev/test fixtures).
+  static const String porchServer = String.fromEnvironment('PORCH_SERVER',
+      defaultValue: 'https://api.porch.chat');
+
+  static String get defaultHomeserver => porchServer;
 
   static String get calendarWidgetHost {
     return data["calendar_widget"] ?? "calendar-widget.commet.chat";
