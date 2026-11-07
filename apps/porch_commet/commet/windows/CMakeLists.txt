@@ -2,6 +2,9 @@
 cmake_minimum_required(VERSION 3.14)
 project(commet LANGUAGES CXX)
 
+# flutter_inappwebview_windows uses <experimental/coroutine>, a hard error on MSVC 14.51+
+add_compile_definitions(_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
+
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
 set(BINARY_NAME "commet")
