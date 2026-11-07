@@ -77,7 +77,7 @@ class PorchRoom extends Room {
   @override
   bool get isFavorite => false;
   @override
-  bool get shouldPreviewMedia => false;
+  bool get shouldPreviewMedia => true;
   @override
   Color get defaultColor => porchHashColor(identifier);
   @override

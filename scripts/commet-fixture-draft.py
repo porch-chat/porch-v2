@@ -53,6 +53,11 @@ try:
             PORCH_BOOTSTRAP_USERNAME="sam", PORCH_BOOTSTRAP_PASSWORD=password)
     env.update(PORCH_BIND=f"127.0.0.1:{free_port()}")
     env["PORCH_URL"] = "http://" + env["PORCH_BIND"]
+    # Control-plane-only LiveKit stand-in: real tickets/leases/flags, no media.
+    lk = free_port()
+    processes.append(subprocess.Popen([sys.executable, str(ROOT / "scripts/livekit-stub.py"), str(lk)]))
+    env.update(PORCH_VOICE_URL=f"ws://127.0.0.1:{lk}", PORCH_VOICE_INTERNAL_URL=f"http://127.0.0.1:{lk}",
+               LIVEKIT_API_KEY="fixturekey", LIVEKIT_API_SECRET="fixturesecret-0123456789abcdef0123456789")
     with tempfile.TemporaryDirectory(prefix="porch-flutter-fixture-") as temp:
         env.update(PORCH_STORAGE_ROOT=temp + "/files")
         server = subprocess.Popen([BIN / "porch-server"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

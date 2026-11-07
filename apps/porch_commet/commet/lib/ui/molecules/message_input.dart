@@ -27,6 +27,7 @@ import 'package:commet/utils/autofill_utils.dart';
 import 'package:commet/utils/debounce.dart';
 import 'package:commet/utils/event_bus.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:commet/ui/molecules/file_pick_seam.dart';
 import 'package:flutter/gestures.dart';
 
 import 'package:flutter/material.dart';
@@ -1165,6 +1166,13 @@ class MessageInputState extends State<MessageInput> {
           icon: Icons.attach_file,
           label: "File",
           execute: () async {
+            final injected = filePickOverride;
+            if (injected != null) {
+              for (final a in await injected() ?? const <PendingFileAttachment>[]) {
+                await handlePickedAttachment(a);
+              }
+              return;
+            }
             FilePickerResult? result = await FilePicker.platform.pickFiles(
                 type: FileType.any, withData: true, allowMultiple: true);
             if (result == null) return;
