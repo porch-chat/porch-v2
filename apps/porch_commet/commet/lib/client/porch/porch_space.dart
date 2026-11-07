@@ -16,6 +16,7 @@ class PorchSpace extends Space {
   final int communityId;
   String name;
   bool canSend = true;
+  bool canInvite = false;
   final List<PorchRoom> _rooms = [];
   final _update = StreamController<void>.broadcast();
   final _added = StreamController<Room>.broadcast();
@@ -59,7 +60,7 @@ class PorchSpace extends Space {
   @override
   Client get client => porch;
   @override
-  Permissions get permissions => PorchPermissions(send: canSend);
+  Permissions get permissions => PorchPermissions(send: canSend, invite: canInvite);
   @override
   String get displayName => name;
   @override

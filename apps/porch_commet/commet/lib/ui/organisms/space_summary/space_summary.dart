@@ -1,3 +1,5 @@
+import 'package:commet/client/porch/porch_space.dart';
+import 'package:commet/ui/organisms/invitation_view/porch_invite_dialog.dart';
 import 'dart:async';
 
 import 'package:commet/client/client.dart';
@@ -129,6 +131,13 @@ class _SpaceSummaryState extends State<SpaceSummary> {
   }
 
   onInviteTap() {
+    final space = widget.space;
+    if (space is PorchSpace) {
+      AdaptiveDialog.show(context,
+          builder: (context) => PorchInviteDialog(space.porch, space),
+          title: "Invite");
+      return;
+    }
     final invitation = widget.space.client.getComponent<InvitationComponent>();
     if (invitation != null) {
       AdaptiveDialog.show(context,

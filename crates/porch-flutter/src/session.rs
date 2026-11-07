@@ -109,6 +109,7 @@ impl Session {
             "notice":notice.map(|_| "Removed local sends may already have been delivered."),
             "connection": self.gateway.as_ref().map(|g| format!("{:?}", *g.state().borrow())).unwrap_or("Stopped".into()),
             "voice":self.voice.as_ref().map(|t| json!({"channel":t.channel,"flags":self.flags,"can_speak":t.can_speak})),
+            "presence":engine.presence(),
             "voice_error":self.voice_error
         }).to_string())
     }

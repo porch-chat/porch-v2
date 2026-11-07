@@ -201,15 +201,16 @@ async fn session(
                             if version!=PROTOCOL_VERSION||!(100..=60000).contains(&heartbeat_interval_ms)||heartbeat_timeout_ms<heartbeat_interval_ms||heartbeat_timeout_ms>180000{return Err(Error::InvalidData)}
                             interval=tokio::time::interval(Duration::from_millis(heartbeat_interval_ms));timeout=Duration::from_millis(heartbeat_timeout_ms);
                         },
-                        GatewayServer::Ready{cursor:next,resumed,..}=>{
+                        GatewayServer::Ready{cursor:next,resumed,presence}=>{
                             if ready{return Err(Error::InvalidData)}
                             if resumed&&!cursor.as_ref().is_some_and(|c|c.stream==next.stream&&c.sequence<=next.sequence){return Err(Error::InvalidData)}
-                            *cursor=Some(next);ready=true;attempt_wake(wake);let _=state.send(ConnectionState::Online);
+                            engine.set_presence(presence,true);*cursor=Some(next);ready=true;attempt_wake(wake);let _=state.send(ConnectionState::Online);
                         },
                         GatewayServer::Dispatch{envelope}=>{
                             let c=cursor.as_mut().ok_or(Error::InvalidData)?;
                             if !ready||envelope.version!=PROTOCOL_VERSION||envelope.sequence<=c.sequence{return Err(Error::InvalidData)}
                             c.sequence=envelope.sequence;
+                            if let GatewayEvent::Presence{entry}=&envelope.event{engine.set_presence(vec![entry.clone()],false)}
                             if matches!(envelope.event,GatewayEvent::SyncRequired | GatewayEvent::VoiceChanged){attempt_wake(wake)}
                         },
                         GatewayServer::HeartbeatAck{nonce:ack}=>{if ack==nonce{last_ack=Instant::now()}},

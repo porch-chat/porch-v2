@@ -7,6 +7,8 @@ import 'package:commet/client/components/room_component.dart';
 import 'package:commet/client/member.dart';
 import 'package:commet/client/permissions.dart';
 import 'package:commet/client/porch/porch_client.dart';
+import 'dart:io';
+import 'package:commet/client/porch/porch_files.dart';
 import 'package:commet/client/porch/porch_models.dart';
 import 'package:commet/client/porch/porch_timeline.dart';
 import 'package:commet/client/role.dart';
@@ -26,6 +28,8 @@ class PorchRoom extends Room {
   int unread = 0, mentions = 0;
   int lastMessageId = 0;
   bool canSend = true;
+  bool canAttach = false;
+  bool canConnect = false;
   PorchTimeline? _timeline;
   final _update = StreamController<void>.broadcast();
   String? lastReadValue;
@@ -60,7 +64,9 @@ class PorchRoom extends Room {
   String? get topic => null;
   @override
   Permissions get permissions =>
-      PorchPermissions(send: canSend && !isVoice && headId != null);
+      PorchPermissions(
+          send: canSend && !isVoice && headId != null,
+          attach: canAttach && !isVoice && headId != null);
   @override
   bool get isE2EE => false;
   @override
@@ -103,10 +109,21 @@ class PorchRoom extends Room {
     if (inReplyTo != null || replaceEvent != null) {
       throw UnsupportedError('Replies and edits are not supported yet');
     }
-    if (processedAttachments.isNotEmpty) {
-      throw UnsupportedError('Attachments are not supported yet');
-    }
     final text = message?.trim() ?? '';
+    final files = processedAttachments.whereType<PorchProcessedFile>().toList();
+    if (files.isNotEmpty) {
+      if (!canAttach) throw UnsupportedError('You cannot attach files here');
+      try {
+        await porch.bridge.sendFiles(headId!, files.map((e) => e.path).toList(), text);
+      } finally {
+        for (final t in files.where((e) => e.temporary)) {
+          try {
+            await File(t.path).delete();
+          } catch (_) {}
+        }
+      }
+      return null;
+    }
     if (text.isEmpty) return null;
     await porch.bridge.send(headId!, text);
     return null;
@@ -129,8 +146,22 @@ class PorchRoom extends Room {
   @override
   Future<List<ProcessedAttachment>> processAttachments(
           List<PendingFileAttachment> attachments) async {
-    if (attachments.isEmpty) return const [];
-    throw UnsupportedError('Attachments are not supported yet');
+    final out = <ProcessedAttachment>[];
+    for (final a in attachments) {
+      if (a.path != null) {
+        out.add(PorchProcessedFile(a.path!));
+        continue;
+      }
+      await a.resolve();
+      final data = a.data;
+      if (data == null) throw UnsupportedError('Could not read the file');
+      final dir = Directory('${porch.cacheDir}/outgoing/${DateTime.now().microsecondsSinceEpoch}');
+      await dir.create(recursive: true);
+      final file = File('${dir.path}/${PorchFileProvider.safeName(a.name ?? 'file')}');
+      await file.writeAsBytes(data);
+      out.add(PorchProcessedFile(file.path, temporary: true));
+    }
+    return out;
   }
   @override
   List<Member> membersList() => porch.membersOf(this);

@@ -51,4 +51,19 @@ void main() {
       expect(src.contains('promptpassword'), isTrue);
     });
   });
+
+  group('phase A', () {
+    test('permissions gate attach and invite', () {
+      final p = PorchPermissions(send: true, attach: false, invite: false);
+      expect(p.canSendMessage, isTrue);
+      expect(p.canAttachFiles, isFalse);
+      expect(p.canInviteUser, isFalse);
+      expect(PorchPermissions(send: true, attach: true, invite: true).canAttachFiles, isTrue);
+    });
+    test('permission bits match protocol', () {
+      expect(porchAttachFiles, 1 << 3);
+      expect(porchCreateInvite, 1 << 10);
+      expect(porchConnect, 1 << 11);
+    });
+  });
 }

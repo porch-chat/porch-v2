@@ -1,3 +1,4 @@
+import 'package:commet/client/porch/porch_models.dart';
 import 'package:commet/client/components/account_switch_prefix/account_switch_prefix.dart';
 import 'package:commet/client/components/push_notification/notification_manager.dart';
 import 'package:commet/client/room.dart';
@@ -127,6 +128,8 @@ class ChatView extends StatelessWidget {
         iconScale: MediaQuery.of(context).mobile ? 0.6 : 0.5,
         isProcessing: state.processing,
         enabled: state.room.permissions.canSendMessage,
+        showAttachmentButton: state.room.permissions is! PorchPermissions ||
+            (state.room.permissions as PorchPermissions).canAttachFiles,
         relatedEventBody: interactingEventBody,
         relatedEventSenderName: relatedEventSenderName,
         relatedEventSenderColor: relatedEventSenderColor,

@@ -8,7 +8,11 @@ import 'package:commet/client/timeline_events/timeline_event_message.dart';
 import 'package:commet/client/timeline_events/timeline_event_feature_reactions.dart';
 import 'package:flutter/material.dart';
 
+const int porchMaxUpload = 1024 * 1024 * 1024; // mirrors porch-protocol MAX_UPLOAD_BYTES
 const int porchSendMessages = 1 << 1;
+const int porchAttachFiles = 1 << 3;
+const int porchCreateInvite = 1 << 10;
+const int porchConnect = 1 << 11;
 
 Color porchHashColor(String key) {
   var h = 0;
@@ -39,9 +43,12 @@ class PorchPeer implements Peer, Member {
 /// Every flag is stated explicitly; upstream defaults are permissive.
 class PorchPermissions implements Permissions {
   final bool send;
-  PorchPermissions({required this.send});
+  final bool attach;
+  final bool invite;
+  PorchPermissions({required this.send, this.attach = false, this.invite = false});
   @override
   bool get canSendMessage => send;
+  bool get canAttachFiles => attach;
   @override
   bool get canChangeRoles => false;
   @override
@@ -75,7 +82,7 @@ class PorchPermissions implements Permissions {
   @override
   bool get canEditChildren => false;
   @override
-  bool get canInviteUser => false;
+  bool get canInviteUser => invite;
   @override
   bool get canMentionRoom => false;
 }
@@ -90,8 +97,10 @@ class PorchMessageEvent extends TimelineEventMessage
   DateTime time;
   TimelineEventStatus statusValue;
   bool removed;
+  List<Attachment>? attachmentList;
 
   PorchMessageEvent({
+    this.attachmentList,
     required this.nonce,
     required this.messageId,
     required this.revision,
@@ -129,7 +138,8 @@ class PorchMessageEvent extends TimelineEventMessage
   @override
   String? get formattedBody => null;
   @override
-  List<Attachment>? get attachments => null;
+  List<Attachment>? get attachments =>
+      (attachmentList?.isEmpty ?? true) ? null : attachmentList;
   @override
   Widget? buildFormattedContent({timeline}) =>
       removed ? null : SelectableText(text);

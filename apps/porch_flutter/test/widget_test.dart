@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -44,6 +45,18 @@ class FakeBridge implements PorchBridge {
   Future<void> leaveVoice() async {}
   @override
   Future<void> voiceFlags(bool muted, bool deafened) async {}
+  @override
+  Future<void> sendFiles(int id, List<String> paths, String text) async {}
+  @override
+  Future<Uint8List> attachmentPreview(int c, int m, String a) async => Uint8List(0);
+  @override
+  Future<void> downloadAttachment(int c, int m, String a, String d) async {}
+  @override
+  Future<String> createCommunityInvite(int c, int u, int e) async => 'code';
+  @override
+  Future<void> joinCommunity(String code) async {}
+  @override
+  Future<Json> voiceParticipants(int c, int ch) async => {'participants': []};
 }
 
 Json fixture({int selected = 10}) => {

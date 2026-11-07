@@ -164,3 +164,117 @@ pub async fn voice_flags(muted: bool, deafened: bool) -> Result<()> {
         }
     }
 }
+
+/// Uploads each file through the resumable engine, then durably queues one message
+/// that references them. Returns after the message is queued, not delivered.
+pub async fn send_files(conversation: i64, paths: Vec<String>, text: String) -> Result<()> {
+    let engine = SESSION.lock().await.engine()?;
+    if paths.is_empty() || paths.len() > 10 {
+        return Err(anyhow::anyhow!("Choose between 1 and 10 files"));
+    }
+    let mut ids = Vec::new();
+    for path in paths {
+        let mut upload = engine
+            .begin_upload(conversation, PathBuf::from(path))
+            .await
+            .map_err(safe)?;
+        let id = upload.status.id.clone();
+        let result: Result<()> = async {
+            while upload.status.state == UploadState::Receiving {
+                upload = engine.advance_upload(&id).await.map_err(safe)?;
+            }
+            Ok(())
+        }
+        .await;
+        if let Err(e) = result {
+            // Keep the resumable record only when the server may still hold it.
+            let _ = engine.cancel_upload(&id).await;
+            return Err(e);
+        }
+        ids.push(id);
+    }
+    engine
+        .queue_attachments(
+            conversation,
+            MessageContent::Markdown { text },
+            None,
+            vec![],
+            false,
+            ids,
+        )
+        .await
+        .map_err(safe)?;
+    tokio::spawn(async move {
+        let _ = engine.flush().await;
+    });
+    Ok(())
+}
+/// Authenticated preview PNG (max 480x320), decoded and bounded by the engine.
+pub async fn attachment_preview(
+    conversation: i64,
+    message: i64,
+    attachment: String,
+) -> Result<Vec<u8>> {
+    let engine = SESSION.lock().await.engine()?;
+    engine
+        .attachment_preview(conversation, message, &attachment)
+        .await
+        .map_err(safe)
+}
+/// Streams to a new file the user chose; refuses to overwrite.
+pub async fn download_attachment(
+    conversation: i64,
+    message: i64,
+    attachment: String,
+    destination: String,
+) -> Result<()> {
+    let engine = SESSION.lock().await.engine()?;
+    engine
+        .download_attachment(
+            conversation,
+            message,
+            &attachment,
+            PathBuf::from(destination),
+        )
+        .await
+        .map_err(safe)
+}
+/// Returns the one-time invite code; the server never lists it again.
+pub async fn create_community_invite(
+    community: i64,
+    max_uses: i32,
+    expires_in_seconds: i64,
+) -> Result<String> {
+    let engine = SESSION.lock().await.engine()?;
+    let created: CreatedCommunityInvite = engine
+        .api()
+        .post(
+            &format!("/communities/{community}/invites"),
+            &CreateInviteRequest {
+                max_uses,
+                expires_in_seconds,
+            },
+        )
+        .await
+        .map_err(safe)?;
+    Ok(created.code)
+}
+pub async fn join_community(code: String) -> Result<()> {
+    let engine = SESSION.lock().await.engine()?;
+    let _: CommunitySummary = engine
+        .api()
+        .post("/communities/join", &JoinCommunity { code })
+        .await
+        .map_err(safe)?;
+    engine.reconcile().await.map_err(safe)
+}
+/// Authorized participants of one voice channel, from the server control plane.
+pub async fn voice_participants(community: i64, channel: i64) -> Result<String> {
+    let engine = SESSION.lock().await.engine()?;
+    let snap: VoiceSnapshot = engine
+        .api()
+        .get(&format!("/voice/{community}/{channel}"))
+        .await
+        .map_err(safe)?;
+    serde_json::to_string(&snap).map_err(|_| anyhow::anyhow!("Invalid voice snapshot"))
+}

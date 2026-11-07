@@ -22,6 +22,7 @@ pub(crate) struct Inner {
     pub signed_out: AtomicBool,
     pub gateway_active: AtomicBool,
     pub discarded_sends: AtomicUsize,
+    pub presence: std::sync::Mutex<std::collections::BTreeMap<i64, PresenceStatus>>,
 }
 impl Engine {
     pub async fn open(origin: &str, token: String, path: impl AsRef<Path>) -> Result<Self> {
@@ -54,8 +55,31 @@ impl Engine {
                 signed_out: AtomicBool::new(false),
                 gateway_active: AtomicBool::new(false),
                 discarded_sends: AtomicUsize::new(0),
+                presence: Default::default(),
             }),
         })
+    }
+    /// Last gateway presence per user. Replaced wholesale on every Ready; offline users are absent.
+    pub fn presence(&self) -> std::collections::BTreeMap<i64, PresenceStatus> {
+        self.inner
+            .presence
+            .lock()
+            .map(|p| p.clone())
+            .unwrap_or_default()
+    }
+    pub(crate) fn set_presence(&self, entries: Vec<PresenceEntry>, replace: bool) {
+        if let Ok(mut map) = self.inner.presence.lock() {
+            if replace {
+                map.clear();
+            }
+            for e in entries {
+                if e.status == PresenceStatus::Offline {
+                    map.remove(&e.user_id);
+                } else {
+                    map.insert(e.user_id, e.status);
+                }
+            }
+        }
     }
     pub fn user(&self) -> &User {
         &self.inner.user

@@ -1,5 +1,8 @@
 import 'dart:async';
+import 'package:commet/client/attachment.dart';
 import 'package:commet/client/client.dart';
+import 'package:commet/client/porch/porch_client.dart';
+import 'package:commet/client/porch/porch_files.dart';
 import 'package:commet/client/porch/porch_models.dart';
 import 'package:commet/client/timeline_events/timeline_event.dart';
 
@@ -20,6 +23,14 @@ class PorchTimeline extends Timeline {
       if (e is PorchMessageEvent && e.nonce == nonce) return e;
     }
     return null;
+  }
+
+  List<Attachment>? _attachments(Json m) {
+    final raw = m['attachments'] as List?;
+    final c = client;
+    if (raw == null || raw.isEmpty || c is! PorchClient) return null;
+    return porchAttachments(
+        c.bridge, c.cacheDir, conversationId, m['id'] as int, raw);
   }
 
   void apply(List<Json> messages, List<Json> pending, String selfId) {
@@ -58,6 +69,7 @@ class PorchTimeline extends Timeline {
             DateTime.now(),
         statusValue: TimelineEventStatus.synced,
         removed: m['deleted'] == true,
+        attachmentList: _attachments(m),
       ));
     }
     for (final d in desired) {
@@ -78,7 +90,9 @@ class PorchTimeline extends Timeline {
             at.revision != d.revision ||
             at.statusValue != d.statusValue ||
             at.text != d.text ||
-            at.removed != d.removed) {
+            at.removed != d.removed ||
+            at.attachmentList?.length != d.attachmentList?.length) {
+          at.attachmentList = d.attachmentList;
           at.messageId = d.messageId;
           at.revision = d.revision;
           at.statusValue = d.statusValue;

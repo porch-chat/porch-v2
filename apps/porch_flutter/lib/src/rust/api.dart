@@ -47,3 +47,62 @@ Future<void> leaveVoice() => RustLib.instance.api.crateApiLeaveVoice();
 
 Future<void> voiceFlags({required bool muted, required bool deafened}) =>
     RustLib.instance.api.crateApiVoiceFlags(muted: muted, deafened: deafened);
+
+/// Uploads each file through the resumable engine, then durably queues one message
+/// that references them. Returns after the message is queued, not delivered.
+Future<void> sendFiles({
+  required int conversation,
+  required List<String> paths,
+  required String text,
+}) => RustLib.instance.api.crateApiSendFiles(
+  conversation: conversation,
+  paths: paths,
+  text: text,
+);
+
+/// Authenticated preview PNG (max 480x320), decoded and bounded by the engine.
+Future<Uint8List> attachmentPreview({
+  required int conversation,
+  required int message,
+  required String attachment,
+}) => RustLib.instance.api.crateApiAttachmentPreview(
+  conversation: conversation,
+  message: message,
+  attachment: attachment,
+);
+
+/// Streams to a new file the user chose; refuses to overwrite.
+Future<void> downloadAttachment({
+  required int conversation,
+  required int message,
+  required String attachment,
+  required String destination,
+}) => RustLib.instance.api.crateApiDownloadAttachment(
+  conversation: conversation,
+  message: message,
+  attachment: attachment,
+  destination: destination,
+);
+
+/// Returns the one-time invite code; the server never lists it again.
+Future<String> createCommunityInvite({
+  required int community,
+  required int maxUses,
+  required int expiresInSeconds,
+}) => RustLib.instance.api.crateApiCreateCommunityInvite(
+  community: community,
+  maxUses: maxUses,
+  expiresInSeconds: expiresInSeconds,
+);
+
+Future<void> joinCommunity({required String code}) =>
+    RustLib.instance.api.crateApiJoinCommunity(code: code);
+
+/// Authorized participants of one voice channel, from the server control plane.
+Future<String> voiceParticipants({
+  required int community,
+  required int channel,
+}) => RustLib.instance.api.crateApiVoiceParticipants(
+  community: community,
+  channel: channel,
+);

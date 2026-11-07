@@ -8,6 +8,9 @@ import 'package:commet/client/components/room_component.dart';
 import 'package:commet/client/components/sidebar_component/sidebar_entries_component.dart';
 import 'package:commet/client/member.dart';
 import 'package:commet/client/porch/porch_models.dart';
+import 'package:commet/client/porch/porch_presence.dart';
+import 'package:commet/client/porch/porch_voice.dart';
+import 'package:commet/client/room_preview.dart' as rp;
 import 'package:commet/client/porch/porch_profile.dart';
 import 'package:commet/client/components/profile/profile_component.dart';
 import 'package:commet/client/porch/porch_room.dart';
@@ -84,7 +87,7 @@ class PorchClient extends Client
   @override
   bool get supportsE2EE => false;
   @override
-  int? get maxFileSize => null;
+  int? get maxFileSize => porchMaxUpload;
   @override
   List<Room> get singleRooms => List.unmodifiable(_dms);
   @override
@@ -139,6 +142,8 @@ class PorchClient extends Client
   }
 
   late final _sidebar = PorchSidebar(this);
+  late final presence = PorchPresenceComponent(this);
+  final _voiceRooms = <String, PorchVoipRoom>{};
 
   static String _loginMessage(String raw) {
     if (raw.contains('401')) return 'Wrong username or password.';
@@ -213,7 +218,18 @@ class PorchClient extends Client
   Future<Space> createSpace(CreateRoomArgs args) async =>
       _no('Creating communities');
   @override
-  Future<Space> joinSpace(String address) async => _no('Joining by address');
+  Future<Space> joinSpace(String address) async {
+    final before = _spaces.map((e) => e.identifier).toSet();
+    await bridge.joinCommunity(address.trim());
+    for (var i = 0; i < 50; i++) {
+      for (final sp in _spaces) {
+        if (!before.contains(sp.identifier)) return sp;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    // Already a member of that community, or the snapshot has not arrived yet.
+    throw StateError('Joined, but the community is not visible yet');
+  }
   @override
   Future<Room> joinRoom(String address) async => _no('Joining by address');
   @override
@@ -223,7 +239,11 @@ class PorchClient extends Client
   @override
   Future<void> leaveSpace(Space space) async => _no('Leaving');
   @override
-  Future<RoomPreview?> getSpacePreview(String address) async => null;
+  Future<RoomPreview?> getSpacePreview(String address) async =>
+      address.trim().isEmpty
+          ? null
+          : rp.GenericRoomPreview(address.trim(),
+              displayName: 'Community invite', type: RoomType.space);
   @override
   Future<RoomPreview?> getRoomPreview(String address) async => null;
   @override
@@ -247,6 +267,7 @@ class PorchClient extends Client
     if (this is T) return this as T;
     if (_sidebar is T) return _sidebar as T;
     if (_profile is T) return _profile as T;
+    if (presence is T) return presence as T;
     return null;
   }
 
@@ -256,7 +277,11 @@ class PorchClient extends Client
     return c == null ? <T>[] : <T>[c];
   }
 
-  T? roomComponent<T extends RoomComponent>(PorchRoom room) => null;
+  T? roomComponent<T extends RoomComponent>(PorchRoom room) {
+    if (!room.isVoice) return null;
+    final v = _voiceRooms.putIfAbsent(room.identifier, () => PorchVoipRoom(this, room));
+    return v is T ? v as T : null;
+  }
 
   // DirectMessagesComponent
   @override
@@ -307,6 +332,10 @@ class PorchClient extends Client
     _status.add(ClientConnectionStatusUpdate(conn == 'online'
         ? ClientConnectionStatus.connected
         : ClientConnectionStatus.connecting));
+    final pr = s['presence'];
+    if (pr is Map) {
+      presence.update(pr.map((k, v) => MapEntry('$k', '$v')));
+    }
     _syncCommunities(s);
     _syncHeads(s);
     final sel = s['selected'];
@@ -357,8 +386,9 @@ class PorchClient extends Client
         space.changed();
       }
       keep.add(space.identifier);
-      space.canSend =
-          ((entry['permissions'] as int? ?? 0) & porchSendMessages) != 0;
+      final bits = entry['permissions'] as int? ?? 0;
+      space.canSend = (bits & porchSendMessages) != 0;
+      space.canInvite = (bits & porchCreateInvite) != 0;
       final next = <PorchRoom>[];
       for (final ch
           in ((entry['channels'] as List?) ?? const []).cast<Json>()) {
@@ -380,6 +410,8 @@ class PorchClient extends Client
           room.changed();
         }
         room.canSend = space.canSend;
+        room.canAttach = (bits & porchAttachFiles) != 0;
+        room.canConnect = (bits & porchConnect) != 0;
         next.add(room);
       }
       space.setRooms(next);
