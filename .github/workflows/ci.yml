@@ -220,6 +220,8 @@ jobs:
         env:
           CARGO_PROFILE_RELEASE_DEBUG: '0'
           CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO: off
+          # MSVC link.exe intermittently fails LNK1201 writing rust_lib_commet.pdb; strip=debuginfo makes rustc pass /DEBUG:NONE so no pdb is written
+          CARGO_PROFILE_RELEASE_STRIP: debuginfo
           # flutter_inappwebview_windows uses deprecated <experimental/coroutine>; MSVC 14.51 hard-errors without this
           CL: /D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS
         run: |
