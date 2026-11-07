@@ -24,7 +24,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:integration_test/integration_test.dart';
-import 'package:porch_flutter/bridge.dart';
 
 import 'package:commet/main.dart';
 import 'package:commet/utils/emoji/unicode_emoji.dart';
@@ -72,12 +71,6 @@ void main() {
     tiamat.getAppScale = () => preferences.appScale.value;
     Intl.defaultLocale = 'en';
     final app = App(clientManager: clientManager!);
-    final prevOnError = FlutterError.onError;
-    FlutterError.onError = (d) {
-      // Upstream Commet layout asserts (Expanded inside Flexible), debug-only, not Porch.
-      if (d.toString().contains('Competing ParentDataWidgets')) return;
-      prevOnError?.call(d);
-    };
     tester.view.physicalSize = const Size(1920, 1080);
     tester.view.devicePixelRatio = 1.0;
     await tester.pumpWidget(app);
@@ -124,8 +117,15 @@ void main() {
 
     // ---- upload through the injected picker seam into the REAL upload path ----
     final dir = Directory.systemTemp.createTempSync('porch-a-');
-    final png = img.encodePng(img.Image(width: 640, height: 400)
-      ..clear(img.ColorRgb8(240, 140, 40)));
+    final src = img.Image(width: 640, height: 400);
+    for (var y = 0; y < 400; y++) {
+      for (var x = 0; x < 640; x++) {
+        // Left half horizontal gradient, right half diagonal stripes; a solid
+        // fill could not prove the decoded preview is this image.
+        src.setPixelRgb(x, y, x < 320 ? (x * 255 ~/ 320) : (((x + y) ~/ 20) % 2 == 0 ? 20 : 235), y * 255 ~/ 400, 120);
+      }
+    }
+    final png = img.encodePng(src);
     final bytes = Uint8List.fromList(png);
     File('${dir.path}/sunset.png').writeAsBytesSync(bytes);
     var pickerCalls = 0;
@@ -170,6 +170,15 @@ void main() {
         provider.conversation, provider.message, provider.attachment);
     expect(preview.length, greaterThan(100));
     expect(preview.sublist(0, 4), [0x89, 0x50, 0x4E, 0x47], reason: 'server preview is a real PNG');
+    final decoded = img.decodePng(preview)!;
+    expect(decoded.width, greaterThan(0));
+    final sx = decoded.width / 640, sy = decoded.height / 400;
+    final left = decoded.getPixel((40 * sx).round(), (100 * sy).round());
+    final right = decoded.getPixel((600 * sx).round(), (100 * sy).round());
+    expect(left.r.toInt(), lessThan(60), reason: 'preview carries the left gradient (dark red edge)');
+    expect(left.b.toInt(), closeTo(120, 6));
+    expect([20, 235].any((v) => (right.r.toInt() - v).abs() < 8), isTrue,
+        reason: 'preview carries the right stripes, not a solid fill');
     await settle(tester, 1500);
     await settle(tester, 3000);
     print('IMG: image='+find.byType(Image).evaluate().length.toString()+' raw='+find.byType(RawImage).evaluate().length.toString());
@@ -242,9 +251,15 @@ void main() {
     final mGeneral = mSpace.rooms.whereType<PorchRoom>().firstWhere((r) => r.displayName == 'general');
     // maya is not the owner/admin: management affordances must be hidden
     // exactly when the server says so.
+    // Friends: ordinary members may send and invite (server default role
+    // grants SEND_MESSAGES and CREATE_INVITE); official announcements are
+    // read-only for non-owners (server test official_is_read_only_and_owner_safe).
     expect(mGeneral.permissions.canSendMessage, isTrue);
-    print('MAYA canInvite=${mSpace.canInvite} send=${mGeneral.canSend}');
-    expect(mSpace.permissions.canInviteUser, mSpace.canInvite);
+    expect(mSpace.canInvite, isTrue);
+    final mAnn = maya.spaces.whereType<PorchSpace>().firstWhere((s) => s.displayName == 'Porch Announcements');
+    expect(mAnn.canInvite, isFalse, reason: 'official community is read-only for members');
+    expect(mAnn.canSend, isFalse);
+    expect(mAnn.permissions.canInviteUser, isFalse);
     expect(mSpace.permissions.canEditAnything, isFalse);
     expect(mSpace.permissions.canKick, isFalse);
     expect(mSpace.permissions.canBan, isFalse);

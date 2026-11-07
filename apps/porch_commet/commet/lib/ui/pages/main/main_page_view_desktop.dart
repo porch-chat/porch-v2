@@ -114,7 +114,7 @@ class MainPageViewDesktop extends StatelessWidget {
                   ],
                 ),
               ),
-              Expanded(child: mainView(context)),
+              mainView(context),
             ],
           ),
           if (state.currentRoom != null)
@@ -290,7 +290,7 @@ class MainPageViewDesktop extends StatelessWidget {
   Widget mainView(BuildContext context) {
     if (state.currentView == MainPageSubView.home ||
         state.currentView == MainPageSubView.rooms)
-      return Flexible(child: homeView());
+      return Expanded(child: homeView());
     if (state.currentRoom != null && state.currentView != MainPageSubView.home)
       return roomChatView();
     if (state.currentSpace != null && state.currentRoom == null)
@@ -319,6 +319,6 @@ class MainPageViewDesktop extends StatelessWidget {
         ),
       );
 
-    return Placeholder();
+    return const Expanded(child: Placeholder());
   }
 }
